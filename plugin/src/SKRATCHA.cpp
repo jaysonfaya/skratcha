@@ -77,9 +77,9 @@ constexpr int    kMaxSamples = 64;                          // entries of the SA
 constexpr double kMaxSeconds = 90.0;                        // longer files are cut (memory)
 constexpr int    kNumHotCues = 8;
 
-constexpr int kAngleFrames = 72;   // must match the label film strip in the skin (one turn)
+constexpr int kAngleFrames = 48;   // must match the slipmat print film strip in the skin (one turn)
 constexpr int kStrobeFrames = 8;   // strobe ring film strip: one dot period
-constexpr int kStrobeDots = 90;    // 90 dots x 0.5556 rev/s = 50 Hz: the dots stand still at 33 1/3 with pitch 0
+constexpr int kStrobeDots = 180;   // 180 dots x 0.5556 rev/s = 100 flashes/s (neon lamp on 50 Hz mains): still at 33 1/3, pitch 0
 constexpr int kStripFrames = 33;   // strip LED film strip: frame 0 = untouched, 1..32 = position
 constexpr float kMaxSpeed = 32.0f; // file samples per output sample, safety clamp
 
@@ -849,9 +849,9 @@ private:
                     setNormalised(kAngle, a);
                     notifyHostParameterChanged(kAngle);
                 }
-                // strobe: the lamp flashes at 50 Hz, so the ring shows its phase relative to 50 flashes per second
+                // strobe: a neon lamp on 50 Hz mains flashes 100 times a second; the ring shows its phase against that
                 const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-                double ph = revs * kStrobeDots - secs * 50.0;
+                double ph = revs * kStrobeDots - secs * 100.0;
                 const float sp = (float)(ph - std::floor(ph));
                 float ds = std::fabs(sp - lastStrobe); if (ds > 0.5f) ds = 1.0f - ds;
                 if (lastStrobe < 0.0f || ds >= 0.5f / kStrobeFrames)

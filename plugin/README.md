@@ -31,7 +31,7 @@ Weil der Touchstrip Pitch Bend sendet, nimmt die MPC deine Scratches als MIDI au
 - Mitgeliefert (selbst synthetisiert, frei): AHH, OOH WAH, STAB, TONE 1K, BREAK 92, BASS DROP.
 
 ## Reiter
-- **DECK**: Plattenteller (drehendes Label mit JF-Logo und Cue-Sticker, Strobe-Ring), START/STOP, 33/45, Pitch-Fader,
+- **DECK**: silbernes DJ-Deck, Filz-Slipmat mit grossem drehendem JF-Aufdruck, 4 Reihen Strobe-Punkte (stehen bei 33⅓ und Pitch 0 still), START/STOP, 33/45, Pitch-Fader,
   Plattenwahl (antippen und wischen), SMOOTH, RANGE, CATCH, LEVEL, FADER, REVERSE, Touchstrip-Anzeige.
 - **SETUP**: Start-/Bremszeit, Pitch-Bereich (8/16/50 %), 1X/LOOP, Strip-Richtung, Loslassen (CENTER/TIMEOUT), Cut-Kurve,
   Crackle, Catch, Pad-Basis, RESCAN, SCRATCH-Balken (für den Touchstrip im Q-LINK-Modus).

@@ -165,6 +165,162 @@
      }
     },
     {
+     "key": "skKnob80d",
+     "value": {
+      "version": 4,
+      "actions": [
+       {
+        "version": 2,
+        "onAction": "Mouse Down",
+        "handler": "Q-Link",
+        "handleName": "Data",
+        "additionalData": "",
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        }
+       },
+       {
+        "version": 2,
+        "onAction": "Double Click",
+        "handler": "Show Overlay",
+        "handleName": "",
+        "additionalData": "knob overlay",
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        }
+       },
+       {
+        "version": 2,
+        "onAction": "Enter Pressed",
+        "handler": "Show Overlay",
+        "handleName": "",
+        "additionalData": "knob overlay",
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        }
+       }
+      ],
+      "backgroundData": {
+       "version": 1,
+       "focussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       },
+       "unfocussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       }
+      },
+      "ignoreMousePresses": false,
+      "disableCoarseDataWheel": false,
+      "repeats": 1,
+      "hideQLinkBounds": true,
+      "componentsData": [
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Focus",
+         "type": "Focus",
+         "data": {
+          "version": 1,
+          "backgroundColour": "00000000",
+          "outlineColour": "00000000",
+          "backgroundInset": 2.0,
+          "outlineThickness": 0.0
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 2,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "WhenFocussed",
+         "boundsType": "Absolute",
+         "bounds": "0 0 80 102",
+         "additionalInvalidatingHandles": []
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Knob",
+         "type": "Knob",
+         "data": {
+          "version": 5,
+          "knobType": "FilmStrip",
+          "filmStrip": "sk_knob80_f64.png",
+          "numFrames": 64,
+          "invert": false,
+          "dragOrientation": "Vertical",
+          "handleName": "Data"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 2,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "0 0 80 80",
+         "additionalInvalidatingHandles": []
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Value",
+         "type": "Label",
+         "data": {
+          "version": 1,
+          "textStyle": {
+           "version": 1,
+           "font": {
+            "version": 1,
+            "name": "Titillium Web",
+            "style": "SemiBold",
+            "height": 15.0
+           },
+           "colour": "ff2a2b2e",
+           "justification": "horizontallyCentred verticallyCentred",
+           "case": "Original"
+          },
+          "type": "Value",
+          "handleName": "Data"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 2,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "-10 80 100 22",
+         "additionalInvalidatingHandles": []
+        }
+       }
+      ]
+     }
+    },
+    {
      "key": "skStrobe",
      "value": {
       "version": 4,
@@ -252,8 +408,8 @@
          "data": {
           "version": 5,
           "knobType": "FilmStrip",
-          "filmStrip": "sk_label_180_f72.png",
-          "numFrames": 72,
+          "filmStrip": "sk_label_340_f48.png",
+          "numFrames": 48,
           "invert": false,
           "dragOrientation": "Vertical",
           "handleName": "Data"
@@ -269,7 +425,7 @@
          "showWhenDataModelInvalid": "Show",
          "whenVisible": "Always",
          "boundsType": "Absolute",
-         "bounds": "0 0 180 180",
+         "bounds": "0 0 340 340",
          "additionalInvalidatingHandles": []
         }
        }
@@ -337,7 +493,7 @@
          "showWhenDataModelInvalid": "Show",
          "whenVisible": "Always",
          "boundsType": "Absolute",
-         "bounds": "0 0 524 524",
+         "bounds": "0 0 510 510",
          "additionalInvalidatingHandles": []
         }
        }
@@ -2572,7 +2728,7 @@
          "showWhenDataModelInvalid": "Show",
          "whenVisible": "Always",
          "boundsType": "Absolute",
-         "bounds": "228 224 180 180",
+         "bounds": "148 144 340 340",
          "additionalInvalidatingHandles": []
         }
        },
@@ -2629,7 +2785,7 @@
          "showWhenDataModelInvalid": "Show",
          "whenVisible": "Always",
          "boundsType": "Absolute",
-         "bounds": "56 52 524 524",
+         "bounds": "63 59 510 510",
          "additionalInvalidatingHandles": []
         }
        },
@@ -2818,7 +2974,7 @@
         "componentData": {
          "version": 1,
          "name": "Smooth",
-         "type": "skKnob80",
+         "type": "skKnob80d",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -2848,7 +3004,7 @@
         "componentData": {
          "version": 1,
          "name": "Strip Range",
-         "type": "skKnob80",
+         "type": "skKnob80d",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -2878,7 +3034,7 @@
         "componentData": {
          "version": 1,
          "name": "Catch",
-         "type": "skKnob80",
+         "type": "skKnob80d",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -2908,7 +3064,7 @@
         "componentData": {
          "version": 1,
          "name": "Level",
-         "type": "skKnob80",
+         "type": "skKnob80d",
          "data": {
           "version": 1,
           "handleName": "Data"
