@@ -50,6 +50,11 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#if defined(__linux__)
+  #include <sys/resource.h>
+  #include <sys/syscall.h>
+  #include <unistd.h>
+#endif
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -112,6 +117,13 @@ public:
         kBrFolder = kBNames + kSlots, kBrFile, kBrRows, kBrInfo = kBrRows + 5, kBrPreview, kBrLoad, kBrFolderName,
         kHLesson, kHRun, kHDemo, kHBpm, kHClick, kHGhost, kHBeat, kHStars, kHMsg, kHText1, kHText2, kHScore, kHFadeLed,
         kFireMode,
+        // ---- 2.1 ----
+        // the ACTIVE deck: one set of controls on the screen, the plugin mirrors them to deck A or B
+        kCPlay, kCSpeed, kCPitch, kCPRange, kCStart, kCBrake, kCOn, kCRev, kCLoop, kCSlot, kCStyle, kCVol,
+        kCAngle, kCStrobe, kCCutLed, kCName,
+        kSlip, kAutoRun, kLayout, kLayoutTap, kPadCut, kPadHold, kPadCue, kCueTap,
+        kDRows, kFRows = kDRows + 7, kFolderPick = kFRows + 7, kFilePick, kFolderStep, kFileStep, kAutoPreview,
+        kHLane, kHPhase, kHHit, kSetCueTap, kDSelRow, kFSelRow,
         kNumParams
     };
 
@@ -123,7 +135,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2000;
+        i.version = 2100;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -219,10 +231,54 @@ public:
         text("hmsg", "Tip"); text("htext1", "Lesson Text 1"); text("htext2", "Lesson Text 2"); text("hscore", "Score");
         addParam(live(boolParam("hfadeled", "Fader Target", false)));
         addParam(choiceParam("firemode", "Fire", {"CUE", "PLAY"}, 1));
+        // ---- 2.1: the active deck (same ranges as the deck parameters) ----
+        addParam(boolParam("cplay", "Start/Stop", false));
+        addParam(choiceParam("cspeed", "Speed", {"33", "45"}, 0));
+        addParam(floatParam("cpitch", "Pitch", -100.0f, 100.0f, 0.0f, "%", 1));
+        addParam(choiceParam("cprange", "Pitch Range", {"8%", "16%", "50%"}, 0));
+        addParam(logParam("cstart", "Start Time", 30.0f, 3000.0f, 700.0f, "ms", 0));
+        addParam(logParam("cbrake", "Brake Time", 30.0f, 5000.0f, 900.0f, "ms", 0));
+        addParam(boolParam("con", "Deck On", true));
+        addParam(boolParam("crev", "Reverse", false));
+        addParam(boolParam("cloop", "Loop", false));
+        addParam(choiceParam("cslot", "Slot", slotNames, 0));
+        addParam(choiceParam("cstyle", "Style", styleNames, 0));
+        addParam(floatParam("cvol", "Deck Volume", -40.0f, 6.0f, 0.0f, "dB", 1));
+        addParam(live(floatParam("cangle", "Angle", 0.0f, 1.0f, 0.0f, "", 3)));
+        addParam(live(floatParam("cstrobe", "Strobe", 0.0f, 1.0f, 0.0f, "", 3)));
+        addParam(live(boolParam("ccutled", "Cut LED", true)));
+        text("cname", "Record");
+        addParam(boolParam("slip", "Slip", false));
+        addParam(choiceParam("autorun", "After Scratch", {"STOP", "RUN ON"}, 1));
+        addParam(fixed(choiceParam("layout", "Layout", {"STUDIO", "BATTLE", "PADS"}, 0)));
+        addParam(fixed(boolParam("laytap", "Layout Tap", false)));
+        addParam(live(boolParam("padcut", "Pad Cut", false)));
+        addParam(live(boolParam("padhold", "Pad Hold", false)));
+        addParam(live(boolParam("padcue", "Pad Cue", false)));
+        addParam(fixed(boolParam("cuetap", "Cue Tap", false)));
+        for (int r = 0; r < 7; ++r) { const std::string id = "drow" + std::to_string(r); text(id.c_str(), ("Folder Row " + std::to_string(r + 1)).c_str()); }
+        for (int r = 0; r < 7; ++r) { const std::string id = "frow" + std::to_string(r); text(id.c_str(), ("File Row " + std::to_string(r + 1)).c_str()); }
+        addParam(fixed(choiceParam("dpick", "Folder Pick", {"-", "1", "2", "3", "4", "5", "6", "7"}, 0)));
+        addParam(fixed(choiceParam("fpick", "File Pick", {"-", "1", "2", "3", "4", "5", "6", "7"}, 0)));
+        addParam(fixed(choiceParam("dstep", "Folder Step", {"-", "UP", "DOWN", "PAGE UP", "PAGE DOWN"}, 0)));
+        addParam(fixed(choiceParam("fstep", "File Step", {"-", "UP", "DOWN", "PAGE UP", "PAGE DOWN"}, 0)));
+        addParam(fixed(boolParam("autoprev", "Auto Preview", true)));
+        addParam(live(intParam("hlane", "Lane", 0, 31, 0)));
+        text("hphase", "Phase");
+        addParam(live(intParam("hhit", "Step Hit", 0, 2, 0)));
+        addParam(fixed(boolParam("setcue", "Set Cue Tap", false)));
+        addParam(live(intParam("dsel", "Folder Sel Row", 0, 7, 0)));
+        addParam(live(intParam("fsel", "File Sel Row", 0, 7, 0)));
         if (numParams() != kNumParams) mpc::log("SKRATCHA: parameter count mismatch %d %d", numParams(), (int)kNumParams);
 
         deckP_[0] = {kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kFader, kReverse, kLoop, kAngle, kCutLed, kStrobe, kASlot, kAStyle, kAVol, kAName, kANames};
         deckP_[1] = {kBPlay, kBSpeed, kBPitch, kBPitchRange, kBStart, kBBrake, kBFader, kBReverse, kBLoop, kBAngle, kBCutLed, kBStrobe, kBSlot, kBStyle, kBVol, kBName, kBNames};
+
+        const int mirror[kNumMirrors][3] = {
+            {kCPlay, kPlay, kBPlay}, {kCSpeed, kSpeed, kBSpeed}, {kCPitch, kPitch, kBPitch}, {kCPRange, kPitchRange, kBPitchRange},
+            {kCStart, kStart, kBStart}, {kCBrake, kBrake, kBBrake}, {kCOn, kFader, kBFader}, {kCRev, kReverse, kBReverse},
+            {kCLoop, kLoop, kBLoop}, {kCSlot, kASlot, kBSlot}, {kCStyle, kAStyle, kBStyle}, {kCVol, kAVol, kBVol}};
+        for (int i = 0; i < kNumMirrors; ++i) for (int k = 0; k < 3; ++k) mirror_[i][k] = mirror[i][k];
 
         buildPrograms();
 
@@ -242,6 +298,8 @@ public:
     {
         stopThread_.store(true);
         if (worker_.joinable()) worker_.join();
+        if (loader_.joinable()) loader_.join();
+        if (scanner_.joinable()) scanner_.join();
         for (int d = 0; d < 2; ++d)
             for (int s = 0; s < kSlots; ++s)
             {
@@ -266,7 +324,9 @@ public:
                     if (Record* r = pending_[d][s].exchange(nullptr)) deck_[d].slot[s] = r;
             for (int d = 0; d < 2; ++d) deck_[d].cur = mpc::clamp(getInt(deckP_[d].slot), 0, kSlots - 1);
             threadStarted_ = true;
-            worker_ = std::thread([this] { backgroundLoop(); });
+            scanner_ = std::thread([this] { scanLoop(); });
+            loader_ = std::thread([this] { loaderLoop(); });
+            worker_ = std::thread([this] { reporterLoop(); });
         }
     }
 
@@ -285,12 +345,23 @@ public:
         prevDemo_ = getBool(kHDemo); prevRun_ = getBool(kHRun);
         teacher_.stop();
         if (prevDemo_ || prevRun_) { teacher_.demo = prevDemo_; teacher_.start(mpc::clamp(getInt(kHLesson), 0, kNumLessons - 1)); }
+        syncMirrors(true);
+        lastLayoutTap_ = getNormalised(kLayoutTap); lastCueTap_ = getNormalised(kCueTap); lastSetCueTap_ = getNormalised(kSetCueTap);
     }
 
     // ---------------------------------------------------------------------------------------------------------
     void process(mpc::ProcessContext& ctx) override
     {
         swapIn();
+        syncMirrors(false);
+        // hidden layout button (the round target light) and the screen CUE / SET CUE keys: every tap flips them
+        if (getNormalised(kLayoutTap) != lastLayoutTap_)
+        {
+            lastLayoutTap_ = getNormalised(kLayoutTap);
+            setFromAudio(kLayout, (float)((getInt(kLayout) + 1) % 3));
+        }
+        if (getNormalised(kCueTap) != lastCueTap_) { lastCueTap_ = getNormalised(kCueTap); Deck& D = deck_[activeDeck_]; jumpTo(D, D.cue[D.cur]); cueFlash_ = (int)(0.15 * sr_); }
+        if (getNormalised(kSetCueTap) != lastSetCueTap_) { lastSetCueTap_ = getNormalised(kSetCueTap); Deck& D = deck_[activeDeck_]; D.cue[D.cur] = D.x; cueFlash_ = (int)(0.3 * sr_); }
         readBlockParams(ctx.numFrames);
         eventClock_ = blockClock_;
         pollParamHands(ctx.numFrames);
@@ -326,7 +397,34 @@ public:
         liveScore_.store(teacher_.scorePct + 1000 * teacher_.bar);
         if (teacher_.starsNew) { teacher_.starsNew = false; liveStars_.store(teacher_.stars); for (int l = 0; l < kNumLessons; ++l) liveBest_[l].store(teacher_.best[l]); }
         if (previewDoneFlag_) { previewDoneFlag_ = false; previewDone_.store(true); }
+        livePadCut_.store(cutHeld_);
+        livePadHold_.store(padHold_);
+        if (cueFlash_ > 0) cueFlash_ -= ctx.numFrames;
+        livePadCue_.store(cueFlash_ > 0 || cueHeld_);
+        liveLane_.store(teacher_.lane);
+        livePhase_.store(teacher_.phase * 10 + teacher_.countBeat);
+        liveHit_.store(teacher_.hit);
     }
+
+    // one set of controls on the screen for the active deck: copy changes both ways
+    void syncMirrors(bool force)
+    {
+        const int d = activeDeck_;
+        for (int i = 0; i < kNumMirrors; ++i)
+        {
+            const int px = mirror_[i][0], dp = mirror_[i][1 + d];
+            const float pv = getNormalised(px), dv = getNormalised(dp);
+            if (force)
+            {
+                if (pv != dv) { setNormalised(px, dv); markDirty(px); }
+                mirrorP_[i] = dv; mirrorD_[i] = dv;
+            }
+            else if (pv != mirrorP_[i]) { setNormalised(dp, pv); markDirty(dp); mirrorP_[i] = pv; mirrorD_[i] = pv; readLater_ = true; }
+            else if (dv != mirrorD_[i]) { setNormalised(px, dv); markDirty(px); mirrorP_[i] = dv; mirrorD_[i] = dv; }
+        }
+    }
+
+    void markDirty(int index) { dirty_[index >> 6].fetch_or(1ull << (index & 63)); }
 
     void parameterChanged(int index, float plainValue) override
     {
@@ -337,14 +435,15 @@ public:
     bool formatValue(int index, float plainValue, std::string& out) override
     {
         static const float ranges[3] = {8.0f, 16.0f, 50.0f};
-        if (index == kPitch || index == kBPitch)
+        if (index == kPitch || index == kBPitch || index == kCPitch)
         {
-            const float pct = plainValue * 0.01f * ranges[mpc::clamp(getInt(index == kPitch ? kPitchRange : kBPitchRange), 0, 2)];
+            const int rp = index == kPitch ? kPitchRange : index == kBPitch ? kBPitchRange : kCPRange;
+            const float pct = plainValue * 0.01f * ranges[mpc::clamp(getInt(rp), 0, 2)];
             out = fmt("%+.2f%%", pct); return true;
         }
         if (index == kStripRange) { out = fmt("%.0f deg", plainValue); return true; }
-        if (index == kPlay || index == kBPlay) { out = plainValue >= 0.5f ? "PLAY" : "STOP"; return true; }
-        if (index == kFader || index == kBFader) { out = plainValue >= 0.5f ? "ON" : "OFF"; return true; }
+        if (index == kPlay || index == kBPlay || index == kCPlay) { out = plainValue >= 0.5f ? "PLAY" : "STOP"; return true; }
+        if (index == kFader || index == kBFader || index == kCOn) { out = plainValue >= 0.5f ? "ON" : "OFF"; return true; }
         if (index == kXFader)
         {
             if (plainValue < 1.0f) out = "A"; else if (plainValue > 99.0f) out = "B";
@@ -367,10 +466,56 @@ public:
             out = std::string(d ? "B" : "A") + " " + std::to_string(s + 1) + "  " + slotName_[d][s];
             return true;
         }
-        if (index >= kANames && index < kANames + 2 * kSlots)
+        if (index == kCName)
         {
-            const int k = index - kANames;
-            out = slotName_[k / kSlots][k % kSlots];
+            const int d = liveActive_.load(), s = liveSlot_[d].load();
+            out = std::string(d ? "B" : "A") + " " + std::to_string(s + 1) + "  " + slotName_[d][s];
+            return true;
+        }
+        if (index >= kANames && index < kANames + kSlots)       // the 8 slots of the ACTIVE deck
+        {
+            out = slotName_[liveActive_.load()][index - kANames];
+            return true;
+        }
+        if (index >= kBNames && index < kBNames + kSlots) { out = slotName_[1][index - kBNames]; return true; }
+        if (index >= kDRows && index < kDRows + 7)
+        {
+            const int f = folderTop_.load() + index - kDRows;
+            out = "";
+            if (scanning_.load()) { if (index == kDRows) out = "SUCHE SAMPLES ..."; return true; }
+            if (f >= 0 && f < (int)browser_.folders.size())
+            {
+                std::string l = browser_.folders[(size_t)f].label;
+                const size_t cut = l.rfind(" > ");
+                std::string tail = cut == std::string::npos ? l : l.substr(cut + 3);
+                if (cut != std::string::npos && f > 0) tail = "  " + tail;    // sub folder: indented
+                for (char& ch : tail) ch = (char)std::toupper((unsigned char)ch);
+                if (tail.size() > 26) tail = tail.substr(0, 26);
+                out = (f == getInt(kBrFolder) - 1 ? "> " : "") + tail;
+            }
+            return true;
+        }
+        if (index >= kFRows && index < kFRows + 7)
+        {
+            const int fo = getInt(kBrFolder) - 1, i = fileTop_.load() + index - kFRows;
+            out = "";
+            if (!scanning_.load() && fo >= 0 && fo < (int)browser_.folders.size())
+            {
+                const BrowserFolder& bf = browser_.folders[(size_t)fo];
+                if (i >= 0 && i < (int)bf.files.size()) out = (i == getInt(kBrFile) - 1 ? "> " : "") + displayName(bf.files[(size_t)i], 27);
+            }
+            return true;
+        }
+        if (index == kHPhase)
+        {
+            const int ph = livePhase_.load();
+            switch (ph / 10)
+            {
+                case 1: out = "HOER ZU - SO KLINGT ES"; break;
+                case 2: out = "ZAEHL MIT ...  " + std::to_string(ph % 10); break;
+                case 3: out = "JETZT DU!"; break;
+                default: out = "BEREIT"; break;
+            }
             return true;
         }
         if (index == kBrFolder || index == kBrFolderName)
@@ -497,6 +642,9 @@ private:
         float lpCoef = 1.0f, lpL = 0.0f, lpR = 0.0f, lp2L = 0.0f, lp2R = 0.0f, rumble = 0.0f, rum1 = 0.0f, rum2 = 0.0f, dust = 0.0f;
         float popEnv = 0.0f;
         uint32_t rng = 0x2545F491u;
+        // slip shadow: where the record would be without the hand
+        double slipX = 0.0, slipVel = 0.0;
+        bool slipValid = false;
     };
 
     enum Source { kSrcNone = 0, kSrcPitchBend, kSrcModWheel, kSrcScratch, kSrcJog, kSrcPad, kSrcHelper };
@@ -570,6 +718,7 @@ private:
             if (old.handActive) letGo(old);
             padHold_ = false; releasePending_ = 0; handSrc_ = kSrcNone; anchorSrc_ = kSrcNone;
             activeDeck_ = want;
+            syncMirrors(true);
         }
 
         const double tauBase = get(kSmooth) * 0.001 * sr_;
@@ -579,6 +728,8 @@ private:
         static const float cutMs[3] = {0.7f, 3.0f, 12.0f};
         cutStep_ = 1.0f / std::max(1.0f, cutMs[mpc::clamp(getInt(kCurve), 0, 2)] * 0.001f * (float)sr_);
         cutOpenMode_ = getInt(kCutMode) == 1;
+        slipOn_ = getBool(kSlip);
+        autoRun_ = getInt(kAutoRun) == 1;
         fireMode_ = getInt(kFireMode);
 
         for (int d = 0; d < 2; ++d)
@@ -665,7 +816,7 @@ private:
     void setFromAudio(int index, float plain)
     {
         set(index, plain);
-        dirty_[index >> 6].fetch_or(1ull << (index & 63));
+        markDirty(index);
     }
 
     void startLesson(int lesson, bool demo)
@@ -729,6 +880,8 @@ private:
             idleSamples_ += frames;
             const bool timeoutSource = handSrc_ != kSrcPitchBend || timeoutRelease_;
             if (timeoutSource && idleSamples_ > (int)(0.120 * sr_)) letGo(D);
+            // safety for strips that never spring back to the centre: 1 s without a value = hand off
+            else if (idleSamples_ > (int)(1.0 * sr_)) letGo(D);
         }
     }
 
@@ -742,6 +895,7 @@ private:
             D.interpLeft = 0;
             lastEventClock_ = -1.0e12;
             D.handVel = D.vel;                  // the hand meets the record at its current speed: no click
+            D.slipX = D.x; D.slipVel = D.motorTarget != 0.0 ? D.vel : 0.0; D.slipValid = slipOn_;
         }
         handSrc_ = src;
         idleSamples_ = 0;
@@ -750,10 +904,28 @@ private:
 
     void letGo(Deck& D)
     {
+        const bool helper = handSrc_ == kSrcHelper;
         D.handActive = false;
-        D.vel = D.handVel;                      // the record keeps the speed the hand gave it
-        D.catching = D.motorTarget != 0.0;      // ... the running motor grabs it with the CATCH time
         if (&D == &deck_[activeDeck_]) { handSrc_ = kSrcNone; releasePending_ = 0; }
+        if (slipOn_ && D.slipValid)
+        {
+            // SLIP: the record carries on where it would be if you had never touched it
+            const double pos = D.slipX;
+            jumpTo(D, pos);
+            D.vel = D.slipVel;
+            D.catching = false;
+            D.slipValid = false;
+            return;
+        }
+        D.vel = D.handVel;                      // the record keeps the speed the hand gave it
+        // AFTER SCRATCH = RUN ON: a stopped deck starts when you let go (the platter keeps turning, like a DJ deck)
+        if (!D.motorOn && autoRun_ && !teacher_.running && !helper)
+        {
+            const int d = &D == &deck_[0] ? 0 : 1;
+            setFromAudio(deckP_[d].play, 1.0f);
+            refreshMotors();
+        }
+        D.catching = D.motorTarget != 0.0;      // ... the running motor grabs it with the CATCH time
     }
 
     void stripEvent(double v, Source src)
@@ -830,6 +1002,11 @@ private:
 
     double mwValue() const { return ((double)((mwMsb_ << 7) | mwLsb_) / 16383.0) * 2.0 - 1.0; }
 
+    // PADS (the screen shows the same 4 x 4 map):
+    //   top row      13 DECK A   14 DECK B   15 REVERSE   16 SLIP
+    //   row 3         9 CUT      10 HOLD     11 CUE       12 START/STOP
+    //   rows 1 + 2    1..8  the 8 samples of the active deck (5-8 above 1-4)
+    // HOLD + CUE stores the cue point (hand on the record, find the spot, tap CUE).
     void handlePad(int f, bool on)
     {
         const int d = activeDeck_;
@@ -838,17 +1015,24 @@ private:
         if (f < kSlots) { if (on) fire(d, f, true); return; }
         switch (f)
         {
-            case 8:  if (on) setFromAudio(P.play, getBool(P.play) ? 0.0f : 1.0f); break;
-            case 9:  if (on) { cutHeld_ = true; cutDeck_ = d; } else cutHeld_ = false; break;
-            case 10:
+            case 8:  if (on) { cutHeld_ = true; cutDeck_ = d; } else cutHeld_ = false; break;
+            case 9:
                 if (on) { padHold_ = true; grab(kSrcPad); anchorSrc_ = kSrcPad; D.rawTarget = D.handTarget = D.x; D.interpLeft = 0; }
                 else { padHold_ = false; if (D.handActive && handSrc_ == kSrcPad) letGo(D); }
                 break;
-            case 11: if (on) setFromAudio(kDeck, d == 0 ? 1.0f : 0.0f); break;   // takes effect at the next block
-            case 12: if (on) jumpTo(D, D.cue[D.cur]); break;
-            case 13: if (on) D.cue[D.cur] = D.x; break;
+            case 10:
+                cueHeld_ = on;
+                if (on)
+                {
+                    if (padHold_) { D.cue[D.cur] = D.x; cueFlash_ = (int)(0.3 * sr_); }   // HOLD + CUE = set cue
+                    else jumpTo(D, D.cue[D.cur]);
+                }
+                break;
+            case 11: if (on) setFromAudio(P.play, getBool(P.play) ? 0.0f : 1.0f); break;
+            case 12: if (on && d != 0) setFromAudio(kDeck, 0.0f); break;
+            case 13: if (on && d != 1) setFromAudio(kDeck, 1.0f); break;
             case 14: if (on) setFromAudio(P.reverse, getBool(P.reverse) ? 0.0f : 1.0f); break;
-            case 15: if (on) setFromAudio(P.speed, getInt(P.speed) == 1 ? 0.0f : 1.0f); break;
+            case 15: if (on) setFromAudio(kSlip, getBool(kSlip) ? 0.0f : 1.0f); break;
             default: break;
         }
         readLater_ = true;
@@ -900,7 +1084,8 @@ private:
             {
                 const Record* r = act.slot[act.cur];
                 const bool aud = act.audible * act.cutGain > 0.5f;
-                const float c = teacher_.tick(act.x, act.handActive && handSrc_ != kSrcHelper, aud, act.motorOn, act.stripScale, r != nullptr, sr_);
+                const float c = teacher_.tick(act.x, act.vel, act.handActive && handSrc_ != kSrcHelper, aud, act.motorOn, act.stripScale, r != nullptr, sr_);
+                if (teacher_.tempoUp) { teacher_.tempoUp = false; setFromAudio(kHBpm, std::min(110.0f, get(kHBpm) + 6.0f)); }
                 outL += c; outR += c;
             }
 
@@ -952,6 +1137,13 @@ private:
             if (D.handVel > kMaxSpeed) D.handVel = kMaxSpeed; else if (D.handVel < -kMaxSpeed) D.handVel = -kMaxSpeed;
             D.x += D.handVel;
             D.vel = D.handVel;
+            if (D.slipValid)
+            {
+                const double target = D.motorTarget * (1.0 + D.wowNow);
+                if (D.slipVel < target) D.slipVel = std::min(target, D.slipVel + D.startStep);
+                else if (D.slipVel > target) D.slipVel = std::max(target, D.slipVel - D.brakeStep);
+                D.slipX += D.slipVel;
+            }
         }
         else
         {
@@ -1101,77 +1293,63 @@ private:
     void rescan()
     {
         scanning_.store(true);
-        for (int r = 0; r < 5; ++r) bump(kBrRows + r);
-        bump(kBrInfo); bump(kBrFolderName);
+        bumpBrowser();
         BrowserIndex idx;
         const std::string pf = mpc::pluginFolder();
         idx.scan(builtInDir_, pf.empty() ? std::string() : pf + "/My Samples");
         {
             std::lock_guard<std::mutex> lk(textMutex_);
             browser_ = std::move(idx);
+            numFolders_.store((int)browser_.folders.size());
         }
         scanning_.store(false);
-        for (int r = 0; r < 5; ++r) bump(kBrRows + r);
-        bump(kBrInfo); bump(kBrFolderName); bump(kBrFolder); bump(kBrFile);
+        bumpBrowser(); bump(kBrFolder); bump(kBrFile);
     }
 
-    void backgroundLoop()
+    void bumpBrowser()
     {
-        int tick = 0;
-        float lastAngle[2] = {-1.0f, -1.0f}, lastStrobe[2] = {-1.0f, -1.0f};
-        int lastStrip = -1, lastCut[2] = {-1, -1}, lastActive = -1, lastSlot[2] = {-1, -1};
-        int lastGhost = -1, lastBeat = -1, lastStars = -1, lastMsg = -1, lastScore = -1, lastFade = -1, lastLesson = -1;
-        int lastFolder = -1, lastFile = -1;
-        bool previewWasOn = false;
-        std::string previewPath;
-        const auto t0 = std::chrono::steady_clock::now();
+        for (int r = 0; r < 7; ++r) { bump(kDRows + r); bump(kFRows + r); }
+        for (int r = 0; r < 5; ++r) bump(kBrRows + r);
+        bump(kBrInfo); bump(kBrFolderName);
+    }
+
+    int filesIn(int folder)
+    {
+        std::lock_guard<std::mutex> lk(textMutex_);
+        return (folder >= 0 && folder < (int)browser_.folders.size()) ? (int)browser_.folders[(size_t)folder].files.size() : 0;
+    }
+
+    static void lowPriority()
+    {
+#if defined(__linux__)
+        setpriority(PRIO_PROCESS, (id_t)syscall(SYS_gettid), 12);   // loading and scanning never compete with audio
+#endif
+    }
+
+    // ---- thread 1: the drive scanner (slow, low priority) ----
+    void scanLoop()
+    {
+        lowPriority();
         rescan();
         while (!stopThread_.load())
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(15));
-            ++tick;
+            std::this_thread::sleep_for(std::chrono::milliseconds(40));
+            if (rescanRequested_.exchange(false)) { rescan(); rescanDone_.store(true); }
+        }
+    }
 
+    // ---- thread 2: loads samples into slots and the preview, deletes replaced ones (low priority) ----
+    void loaderLoop()
+    {
+        lowPriority();
+        std::string previewPath;
+        bool previewWasOn = false;
+        while (!stopThread_.load())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
             for (int d = 0; d < 2; ++d) for (int s = 0; s < kSlots; ++s) delete retired_[d][s].exchange(nullptr);
             delete previewRetired_.exchange(nullptr);
-
-            if (rescanRequested_.exchange(false))
-            {
-                rescan();
-                if (getBool(kRescan)) { set(kRescan, 0.0f); if (effect_ && host_) notifyHostParameterChanged(kRescan); }
-            }
-
-            // browser: LOAD TO SLOT n puts the selected file into slot n of the active deck and onto its platter
-            const int lr = loadRequest_.exchange(0);
-            if (lr > 0)
-            {
-                const std::string p = selectedPath();
-                const int d = mpc::clamp(getInt(kDeck), 0, 1), s = mpc::clamp(lr - 1, 0, kSlots - 1);
-                if (!p.empty())
-                {
-                    { std::lock_guard<std::mutex> lk(wantMutex_); want_[d][s] = p; }
-                    set(deckP_[d].slot, (float)s);
-                    if (effect_ && host_) notifyHostParameterChanged(deckP_[d].slot);
-                }
-                set(kBrLoad, 0.0f);
-                if (effect_ && host_) notifyHostParameterChanged(kBrLoad);
-            }
             loadWantedSlots(false);
-
-            // browser: a new folder starts at its first file; the rows follow the selection
-            const int folder = getInt(kBrFolder), file = getInt(kBrFile);
-            if (folder != lastFolder)
-            {
-                if (lastFolder >= 0 && file != 1) { set(kBrFile, 1.0f); if (effect_ && host_) notifyHostParameterChanged(kBrFile); }
-                lastFolder = folder; lastFile = -1;
-                bump(kBrFolderName); bump(kBrInfo);
-            }
-            if (getInt(kBrFile) != lastFile)
-            {
-                lastFile = getInt(kBrFile);
-                for (int r = 0; r < 5; ++r) bump(kBrRows + r);
-                bump(kBrInfo);
-            }
-            // preview: (re)load when switched on or when the selection changes while on
             const bool pv = getBool(kBrPreview);
             if (pv)
             {
@@ -1179,80 +1357,190 @@ private:
                 if ((!previewWasOn || p != previewPath) && previewPending_.load() == nullptr && previewRetired_.load() == nullptr)
                 {
                     previewPath = p;
-                    if (Record* r = p.empty() ? nullptr : loadRecord(p, 30.0)) previewPending_.store(r);
+                    if (Record* r = p.empty() ? nullptr : loadRecord(p, 20.0)) previewPending_.store(r);
                 }
             }
             else previewPath.clear();
             previewWasOn = pv;
-            if (previewDone_.exchange(false) && getBool(kBrPreview))
+        }
+    }
+
+    // ---- thread 3: the reporter. Cheap work only, every 15 ms: browser keys, texts, live values to the MPC ----
+    void keepVisible(int sel, int count, std::atomic<int>& top)
+    {
+        int t = top.load();
+        if (sel < t) t = sel;
+        if (sel > t + 6) t = sel - 6;
+        t = std::max(0, std::min(t, std::max(0, count - 7)));
+        top.store(t);
+    }
+
+    void reporterLoop()
+    {
+        int tick = 0;
+        float lastAngle[3] = {-1.0f, -1.0f, -1.0f}, lastStrobe[3] = {-1.0f, -1.0f, -1.0f};
+        int lastStrip = -1, lastCut[2] = {-1, -1}, lastActive = -1, lastSlot[2] = {-1, -1}, lastCCut = -1;
+        int lastGhost = -1, lastBeat = -1, lastStars = -1, lastMsg = -1, lastScore = -1, lastFade = -1, lastLesson = -1;
+        int lastFolder = -1, lastFile = -1, lastDTop = -1, lastFTop = -1, lastLane = -1, lastPhase = -1, lastHit = -1;
+        int lastPadCut = -1, lastPadHold = -1, lastPadCue = -1;
+        const auto t0 = std::chrono::steady_clock::now();
+        auto notify = [this](int idx) { if (effect_ != nullptr && host_ != nullptr) notifyHostParameterChanged(idx); };
+        while (!stopThread_.load())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+            ++tick;
+            if (rescanDone_.exchange(false) && getBool(kRescan)) { set(kRescan, 0.0f); notify(kRescan); }
+
+            // ---- browser: tap a row, step keys, Q-Links; the lists follow the selection ----
+            const int nF = numFolders_.load();
+            const int dp = getInt(kFolderPick), fp = getInt(kFilePick), ds = getInt(kFolderStep), fs = getInt(kFileStep);
+            if (dp > 0) { set(kBrFolder, (float)std::min(std::max(1, nF), folderTop_.load() + dp)); notify(kBrFolder); set(kFolderPick, 0.0f); notify(kFolderPick); }
+            if (ds > 0)
             {
-                set(kBrPreview, 0.0f); previewWasOn = false;
-                if (effect_ && host_) notifyHostParameterChanged(kBrPreview);
+                const int step = ds == 1 ? -1 : ds == 2 ? 1 : ds == 3 ? -7 : 7;
+                set(kBrFolder, (float)mpc::clamp(getInt(kBrFolder) + step, 1, std::max(1, nF))); notify(kBrFolder);
+                set(kFolderStep, 0.0f); notify(kFolderStep);
             }
+            int folder = getInt(kBrFolder);
+            if (folder != lastFolder)
+            {
+                if (lastFolder >= 0) { set(kBrFile, 1.0f); notify(kBrFile); fileTop_.store(0); }
+                lastFolder = folder; lastFile = -1;
+                keepVisible(folder - 1, nF, folderTop_);
+                for (int r = 0; r < 7; ++r) bump(kDRows + r);
+                bump(kBrFolderName); bump(kBrInfo);
+            }
+            const int nFiles = filesIn(folder - 1);
+            if (fp > 0)
+            {
+                const int sel = std::min(std::max(1, nFiles), fileTop_.load() + fp);
+                set(kBrFile, (float)sel); notify(kBrFile);
+                set(kFilePick, 0.0f); notify(kFilePick);
+                if (getBool(kAutoPreview) && !getBool(kBrPreview)) { set(kBrPreview, 1.0f); notify(kBrPreview); }
+            }
+            if (fs > 0)
+            {
+                const int step = fs == 1 ? -1 : fs == 2 ? 1 : fs == 3 ? -7 : 7;
+                set(kBrFile, (float)mpc::clamp(getInt(kBrFile) + step, 1, std::max(1, nFiles))); notify(kBrFile);
+                set(kFileStep, 0.0f); notify(kFileStep);
+            }
+            if (getInt(kBrFile) != lastFile)
+            {
+                lastFile = getInt(kBrFile);
+                keepVisible(lastFile - 1, nFiles, fileTop_);
+                for (int r = 0; r < 7; ++r) bump(kFRows + r);
+                for (int r = 0; r < 5; ++r) bump(kBrRows + r);
+                bump(kBrInfo);
+            }
+            if (folderTop_.load() != lastDTop) { lastDTop = folderTop_.load(); for (int r = 0; r < 7; ++r) bump(kDRows + r); }
+            if (fileTop_.load() != lastFTop) { lastFTop = fileTop_.load(); for (int r = 0; r < 7; ++r) bump(kFRows + r); }
+            {
+                // highlight bars: which visible row holds the selection (0 = none visible)
+                const int dsr = getInt(kBrFolder) - 1 - folderTop_.load(), fsr = getInt(kBrFile) - 1 - fileTop_.load();
+                const int dv = (dsr >= 0 && dsr < 7 && nF > 0) ? dsr + 1 : 0, fv = (fsr >= 0 && fsr < 7 && nFiles > 0) ? fsr + 1 : 0;
+                if (dv != getInt(kDSelRow)) { set(kDSelRow, (float)dv); notify(kDSelRow); }
+                if (fv != getInt(kFSelRow)) { set(kFSelRow, (float)fv); notify(kFSelRow); }
+            }
+
+            // LOAD TO SLOT n: the selected file goes into slot n of the active deck and onto its platter
+            const int lr = loadRequest_.exchange(0);
+            if (lr > 0)
+            {
+                const std::string p = selectedPath();
+                const int d = mpc::clamp(getInt(kDeck), 0, 1), sl = mpc::clamp(lr - 1, 0, kSlots - 1);
+                if (!p.empty())
+                {
+                    { std::lock_guard<std::mutex> lk(wantMutex_); want_[d][sl] = p; }
+                    std::lock_guard<std::mutex> lk(textMutex_);
+                    slotName_[d][sl] = "LADE ...";
+                }
+                bump(kANames + sl); bump(kCName);
+                set(deckP_[d].slot, (float)sl); notify(deckP_[d].slot);
+                set(kBrLoad, 0.0f); notify(kBrLoad);
+            }
+            if (previewDone_.exchange(false) && getBool(kBrPreview)) { set(kBrPreview, 0.0f); notify(kBrPreview); }
 
             // a new lesson starts at its own tempo
             const int lesson = getInt(kHLesson);
             if (lesson != lastLesson)
             {
-                if (lastLesson >= 0) { set(kHBpm, kLessons[mpc::clamp(lesson, 0, kNumLessons - 1)].bpm); if (effect_ && host_) notifyHostParameterChanged(kHBpm); }
+                if (lastLesson >= 0) { set(kHBpm, kLessons[mpc::clamp(lesson, 0, kNumLessons - 1)].bpm); notify(kHBpm); }
                 lastLesson = lesson;
                 bump(kHText1); bump(kHText2); bump(kHScore);
             }
 
             if (effect_ == nullptr || host_ == nullptr) continue;
 
-            // ~33 Hz live display
+            // ---- live values, ~33 Hz ----
             if ((tick & 1) == 0)
             {
                 const int active = liveActive_.load();
+                const bool battle = getInt(kLayout) == 1;
+                const bool turntable = getInt(kLayout) != 2;
                 const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-                if (active != lastActive) { lastActive = active; lastAngle[active] = -1.0f; lastStrobe[active] = -1.0f; }
+                if (active != lastActive)
+                {
+                    lastActive = active;
+                    for (int k = 0; k < 3; ++k) { lastAngle[k] = -1.0f; lastStrobe[k] = -1.0f; }
+                    for (int sl = 0; sl < kSlots; ++sl) bump(kANames + sl);
+                    bump(kCName);
+                }
+                // record angle and strobe: the active deck (k = 2) always, both decks in the BATTLE layout
+                for (int k = 0; k < 3 && turntable; ++k)
+                {
+                    const int d = k == 2 ? active : k;
+                    if (k < 2 && !battle) continue;
+                    const int angP = k == 2 ? kCAngle : deckP_[d].angle, strP = k == 2 ? kCStrobe : deckP_[d].strobe;
+                    const double revs = liveRevs_[d].load();
+                    const float a = (float)(revs - std::floor(revs));
+                    float da = std::fabs(a - lastAngle[k]); if (da > 0.5f) da = 1.0f - da;
+                    if (lastAngle[k] < 0.0f || da >= 0.5f / kAngleFrames) { lastAngle[k] = a; setNormalised(angP, a); notifyHostParameterChanged(angP); }
+                    const double ph = revs * kStrobeDots - secs * 100.0;
+                    const float sp = (float)(ph - std::floor(ph));
+                    float ds2 = std::fabs(sp - lastStrobe[k]); if (ds2 > 0.5f) ds2 = 1.0f - ds2;
+                    if (lastStrobe[k] < 0.0f || ds2 >= 0.5f / kStrobeFrames) { lastStrobe[k] = sp; setNormalised(strP, sp); notifyHostParameterChanged(strP); }
+                }
                 for (int d = 0; d < 2; ++d)
                 {
-                    const DeckParams& P = deckP_[d];
-                    const double revs = liveRevs_[d].load();
-                    // only the deck on screen turns (half the traffic); the other one catches up when shown
-                    if (d == active)
-                    {
-                        const float a = (float)(revs - std::floor(revs));
-                        float da = std::fabs(a - lastAngle[d]); if (da > 0.5f) da = 1.0f - da;
-                        if (lastAngle[d] < 0.0f || da >= 0.5f / kAngleFrames) { lastAngle[d] = a; setNormalised(P.angle, a); notifyHostParameterChanged(P.angle); }
-                        const double ph = revs * kStrobeDots - secs * 100.0;
-                        const float sp = (float)(ph - std::floor(ph));
-                        float ds = std::fabs(sp - lastStrobe[d]); if (ds > 0.5f) ds = 1.0f - ds;
-                        if (lastStrobe[d] < 0.0f || ds >= 0.5f / kStrobeFrames) { lastStrobe[d] = sp; setNormalised(P.strobe, sp); notifyHostParameterChanged(P.strobe); }
-                    }
                     const int c = liveCut_[d].load() ? 1 : 0;
-                    if (c != lastCut[d]) { lastCut[d] = c; set(P.cutled, (float)c); notifyHostParameterChanged(P.cutled); }
+                    if (c != lastCut[d]) { lastCut[d] = c; set(deckP_[d].cutled, (float)c); notifyHostParameterChanged(deckP_[d].cutled); }
                     const int sl = liveSlot_[d].load();
-                    if (sl != lastSlot[d]) { lastSlot[d] = sl; bump(P.name); }
+                    if (sl != lastSlot[d]) { lastSlot[d] = sl; bump(deckP_[d].name); bump(kCName); }
                 }
+                auto report = [&](int idx, int v, int& last) { if (v != last) { last = v; set(idx, (float)v); notifyHostParameterChanged(idx); } };
+                report(kCCutLed, liveCut_[active].load() ? 1 : 0, lastCCut);
                 const int s = liveStrip_.load();
                 if (s != lastStrip) { lastStrip = s; set(kStripLed, (float)s); notifyHostParameterChanged(kStripLed); }
-                auto report = [&](int idx, int v, int& last) { if (v != last) { last = v; set(idx, (float)v); notifyHostParameterChanged(idx); } };
                 report(kHGhost, liveGhost_.load(), lastGhost);
                 report(kHBeat, liveBeat_.load(), lastBeat);
                 report(kHStars, liveStars_.load(), lastStars);
                 report(kHFadeLed, liveFadeLed_.load() ? 1 : 0, lastFade);
+                report(kHLane, liveLane_.load(), lastLane);
+                report(kHHit, liveHit_.load(), lastHit);
+                report(kPadCut, livePadCut_.load() ? 1 : 0, lastPadCut);
+                report(kPadHold, livePadHold_.load() ? 1 : 0, lastPadHold);
+                report(kPadCue, livePadCue_.load() ? 1 : 0, lastPadCue);
+                const int ph = livePhase_.load();
+                if (ph != lastPhase) { lastPhase = ph; bump(kHPhase); }
                 const int m = liveMsg_.load();
                 if (m != lastMsg) { lastMsg = m; bump(kHMsg); }
                 const int sc = liveScore_.load();
                 if (sc != lastScore) { lastScore = sc; bump(kHScore); }
-
-                for (int w = 0; w < 2; ++w)
-                {
-                    const uint64_t dbits = dirty_[w].exchange(0ull);
-                    for (int i = 0; i < 64; ++i) if (dbits & (1ull << i)) notifyHostParameterChanged(w * 64 + i);
-                    const uint64_t bbits = bumps_[w].exchange(0ull);
-                    for (int i = 0; i < 64; ++i)
-                        if (bbits & (1ull << i))
-                        {
-                            const int idx = w * 64 + i;
-                            float v = getNormalised(idx) + 0.0101f; if (v > 1.0f) v -= 1.0f;   // a new value: the MPC re-reads the text
-                            setNormalised(idx, v);
-                            notifyHostParameterChanged(idx);
-                        }
-                }
+            }
+            // parameter changes made by pads, and changed texts: every tick (fast feedback)
+            for (int w = 0; w < kWords; ++w)
+            {
+                const uint64_t dbits = dirty_[w].exchange(0ull);
+                for (int i = 0; i < 64; ++i) if (dbits & (1ull << i)) notifyHostParameterChanged(w * 64 + i);
+                const uint64_t bbits = bumps_[w].exchange(0ull);
+                for (int i = 0; i < 64; ++i)
+                    if (bbits & (1ull << i))
+                    {
+                        const int idx = w * 64 + i;
+                        float v = getNormalised(idx) + 0.0101f; if (v > 1.0f) v -= 1.0f;   // a new value: the MPC re-reads the text
+                        setNormalised(idx, v);
+                        notifyHostParameterChanged(idx);
+                    }
             }
             if (needDisplayUpdate_.exchange(false)) requestDisplayUpdate();
         }
@@ -1276,6 +1564,12 @@ private:
     // pads, cut
     int padBase_ = 36, cutDeck_ = 0, fireMode_ = 1;
     bool cutHeld_ = false, setCueHeld_ = false, readLater_ = false, cutOpenMode_ = false;
+    bool slipOn_ = false, autoRun_ = true, cueHeld_ = false;
+    int cueFlash_ = 0;
+    float lastLayoutTap_ = 0.0f, lastCueTap_ = 0.0f, lastSetCueTap_ = 0.0f;
+    static constexpr int kNumMirrors = 12;
+    int mirror_[kNumMirrors][3] = {};
+    float mirrorP_[kNumMirrors] = {}, mirrorD_[kNumMirrors] = {};
     float cutStep_ = 0.03f;
     double cueStaging_[2][kSlots] = {};
     std::atomic<bool> cueStagingValid_{false};
@@ -1302,7 +1596,12 @@ private:
     std::atomic<bool> scanning_{true};
     std::atomic<int> loadRequest_{0};
     std::atomic<bool> rescanRequested_{false}, needDisplayUpdate_{false}, stopThread_{false};
-    std::thread worker_;
+    std::thread worker_, loader_, scanner_;
+    static constexpr int kWords = (kNumParams + 63) / 64;
+    std::atomic<int> folderTop_{0}, fileTop_{0}, numFolders_{0};
+    std::atomic<bool> rescanDone_{false};
+    std::atomic<bool> livePadCut_{false}, livePadHold_{false}, livePadCue_{false};
+    std::atomic<int> liveLane_{0}, livePhase_{0}, liveHit_{0};
     bool threadStarted_ = false;
     // live display values (audio -> background reporter)
     std::atomic<double> liveRevs_[2] = {};
@@ -1310,7 +1609,7 @@ private:
     std::atomic<int> liveSlot_[2] = {}, liveStrip_{0}, liveActive_{0}, liveGhost_{0}, liveBeat_{0}, liveStars_{0}, liveMsg_{0}, liveScore_{0};
     std::atomic<int> liveBest_[kNumLessons] = {};
     std::atomic<bool> liveFadeLed_{false};
-    std::atomic<uint64_t> dirty_[2] = {}, bumps_[2] = {};
+    std::atomic<uint64_t> dirty_[kWords] = {}, bumps_[kWords] = {};
 };
 
 MPC_PLUGIN_ENTRY(SKRATCHA)

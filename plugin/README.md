@@ -1,4 +1,4 @@
-# SKRATCHA 2.0 – zwei Scratch-Plattenspieler für die MPC
+# SKRATCHA 2.1 – zwei Scratch-Plattenspieler für die MPC
 
 Von **JJ DA PLUG**. Instrument-Plugin für die MPC Live III / XL (arm64) und die MPC Live / Live II / One (arm32), gebaut mit dem offiziellen MPC Plugin SDK.
 
@@ -15,34 +15,44 @@ SKRATCHA hat zwei Decks mit je acht Sample-Slots und einen Battle-Crossfader. Ge
 **Zurück:** Den Ordner wieder löschen. Am System wird nichts verändert.
 
 ## Bedienung
-- **DECK A / DECK B** (oben rechts oder Pad 12) wählt das aktive Deck. Nur das aktive Deck hört auf Strip und Bildschirm, und die Ansicht wechselt mit.
-  - Der Wechsel passiert nur, wenn du ihn selbst auslöst.
-  - Das andere Deck läuft weiter.
-- **Touch Strip:** Berühren heißt Hand auf der Platte. Bewegen scratcht. Beim Loslassen fängt der Motor die Platte wieder (CATCH).
-- **8 Slots pro Deck:**
-  - Pads 1–8 entsprechen den Slot-Tasten auf dem Bildschirm. Die untere Reihe ist 1–4, die obere 5–8, wie auf den Pads.
-  - Ein Slot legt sein Sample auf die Platte. Mit FIRE = PLAY (Standard) startet es sofort, mit CUE wartet es auf die Hand.
-- **Crossfader:** Links ist Deck A, rechts Deck B. Q-Link 1 ist der Crossfader.
-  - **CURVE** reicht von SMOOTH (weicher Übergang) bis RAZOR (offen nach 1,5 % Weg).
-  - Das Kurvenbild zeigt, wie der Fader gerade arbeitet.
-  - **CUT LAG** ist eine tote Zone am geschlossenen Ende, damit nichts durchblutet.
-  - **HAMSTER** dreht die Seiten um.
-- **CUT-Pad (Pad 10)** ist der schnellste Fader:
-  - CUT CLOSE: Halten schließt das aktive Deck.
-  - CUT OPEN: Das aktive Deck klingt nur, solange du hältst. Das ist ideal für Forwards, Chirps und Transformer.
-  - **CUT SPEED** (SETUP) bestimmt, wie hart der Schnitt ist: 0,7, 3 oder 12 ms.
-- **SIMPLE / ADVANCED** (Taste oben rechts):
-  - In SIMPLE zeigt das Deck RANGE, CURVE, DECK-VOLUME und LEVEL.
-  - In ADVANCED zeigt es SMOOTH, CATCH, CUT LAG und CRACKLE. SETUP zeigt dann alle Motor-Einstellungen.
+### Die Pads = der Bildschirm (4 × 4)
+Rechts auf dem DECK-Reiter liegen die 16 Pads genau so wie auf der MPC. Was du drückst, leuchtet auf dem Bildschirm mit. Tippen auf dem Bildschirm macht dasselbe wie das Pad.
 
-### Pads (ab C1 = 36, in SETUP auf 37 umstellbar)
-| Pad | Funktion | Pad | Funktion |
-|---|---|---|---|
-| 1–8 | Slot 1–8 des aktiven Decks | 13 | CUE (zurück zum Cue-Punkt) |
-| 9 | START / STOP | 14 | SET CUE |
-| 10 | CUT | 15 | REVERSE |
-| 11 | HOLD (Hand auf der Platte) | 16 | 33 / 45 |
-| 12 | DECK A ↔ B | | |
+| | Spalte 1 | Spalte 2 | Spalte 3 | Spalte 4 |
+|---|---|---|---|---|
+| **oben (13–16)** | DECK A | DECK B | REVERSE | SLIP |
+| **(9–12)** | CUT (halten) | HOLD (Hand auf der Platte) | CUE (zurück zum Cue) | START / STOP |
+| **(5–8)** | Sample 5 | Sample 6 | Sample 7 | Sample 8 |
+| **unten (1–4)** | Sample 1 | Sample 2 | Sample 3 | Sample 4 |
+
+- **Unten** liegen die Samples, **darüber** die Steuerung, **ganz oben** die Deck-Wahl.
+- **HOLD + CUE** setzt den Cue-Punkt: Hand auf die Platte, die Stelle suchen, dann CUE tippen.
+- **DECK A / DECK B** wählt das aktive Deck. Strip, Pads, Knöpfe und Anzeige gehören dann zu diesem Deck. Gewechselt wird nur, wenn du A oder B drückst.
+
+### Platte und Touch Strip
+- Berühren heißt Hand auf der Platte, Bewegen scratcht.
+- **Loslassen:** Der Teller läuft weiter (Einstellung **WEITERLAUF**, Standard). Ein gestoppter Teller startet beim Loslassen, wie bei einem echten DJ-Deck. Mit **STOP** bleibt er stehen.
+- **SLIP** (Pad 16): Während du scratchst, läuft die Platte im Hintergrund weiter. Beim Loslassen geht es genau dort weiter, wo der Track ohne Scratch wäre.
+- **Sicherheit:** Meldet der Strip 1 s lang nichts mehr, gilt die Hand als weg. So bleibt die Platte nie hängen.
+
+### Crossfader und Cut
+- Links ist Deck A, rechts Deck B. Q-Link 1 ist der Crossfader.
+- **CURVE** reicht von SMOOTH bis RAZOR. Das Kurvenbild zeigt, wie der Fader gerade arbeitet.
+- **CUT ZU / CUT AUF** gilt für Pad 9:
+  - CUT ZU: Halten macht das aktive Deck stumm.
+  - CUT AUF: Das Deck klingt nur, solange du hältst. Das ist ideal für Forwards, Chirps und Transformer.
+
+### SIMPLE / ADVANCED
+Die Taste **ADVANCED** unten rechts schaltet den erweiterten Modus ein.
+- Ein oranger Rahmen mit der Aufschrift ADVANCED zeigt, dass er an ist.
+- Die Knöpfe werden zu SMOOTH, CATCH, CUT LAG und CRACKLE.
+- Auf dem Plattenspieler erscheint ein ADVANCED-Feld mit HAMSTER, WEITERLAUF, CUE SETZEN, FIRE = PLAY, LOOP und DECK ON.
+
+### Drei Ansichten (Layouts)
+Tippe auf den **runden Knopf oben links** (die Zielleuchte des Plattenspielers). Jeder Tipp wechselt zur nächsten Ansicht. Du kannst die Ansicht auch in SETUP wählen.
+1. **STUDIO:** ein großer Plattenspieler mit Mixer und Pads.
+2. **BATTLE:** beide Plattenspieler nebeneinander, der Crossfader in der Mitte, die Pads unten. Das aktive Deck leuchtet orange.
+3. **PADS:** große Pads zum Spielen, dazu Crossfader und Regler. Diese Ansicht braucht am wenigsten Rechenleistung.
 
 ## Turntable-Stile (pro Deck)
 Jeder Stil ändert den Klang, das Aussehen und das Spielgefühl.
@@ -54,44 +64,45 @@ Jeder Stil ändert den Klang, das Aussehen und das Spielgefühl.
 | **RIEMEN 70ER** | schwacher Riemen (langer Anlauf, rutscht, fängt spät) | schwer, träge | leichtes Leiern | warm, etwas Rumpeln und Staub |
 
 ## BROWSER
-1. Ordner wählen: über die Anzeige wischen oder Q-Link 1 drehen.
-2. Datei wählen: über die Liste wischen oder Q-Link 2 drehen.
-3. Mit **VORHÖREN** hörst du die Datei an.
-4. Ziel-Deck wählen und auf einen **Slot tippen**. Die Datei wird geladen und liegt sofort auf der Platte.
-
-Durchsucht werden:
-- die eingebauten Samples,
-- der Ordner `My Samples` im Plugin-Ordner,
-- alle Laufwerke (USB, SD, SSD), bis 7 Ordner tief.
-
-**NEU SUCHEN** liest die Laufwerke neu ein. Pro Slot werden höchstens 15 s geladen (WAV, mono oder stereo). Die Slot-Belegung wird im Projekt gespeichert.
+- **Links die Ordner, in der Mitte die Dateien.** Tippe einfach auf eine Zeile. Mit den Pfeilen blätterst du um eine Zeile, mit den Doppelpfeilen um eine Seite. Q-Link 1 wählt den Ordner, Q-Link 2 die Datei.
+- **AUTO-HÖREN** (an): Tippen auf eine Datei spielt sie gleich an. **VORHÖREN** startet und stoppt das Anhören von Hand.
+- **Laden:** Ziel-Deck wählen und auf einen der 8 Slots tippen. Die Datei liegt sofort auf der Platte.
+- **Was durchsucht wird:** die eingebauten Samples, `My Samples` im Plugin-Ordner und alle Laufwerke bis 7 Ordner tief. Die Suche läuft im Hintergrund und bremst nichts. **NEU SUCHEN** liest die Laufwerke neu ein.
+- **Grenzen:** Pro Slot werden höchstens 15 s geladen (WAV, mono oder stereo). Die Belegung wird im Projekt gespeichert.
 
 ## LERNEN – der Scratch-Lehrer
-1. Eine Lektion wählen:
+1. **Lektion wählen:**
    1. BABY SCRATCH
    2. DRAG
    3. FORWARD
    4. CHIRP
    5. TRANSFORMER
    6. TEAR
-2. **DEMO** drücken: Der Lehrer spielt die Bewegung zwei Takte lang auf dem aktiven Deck vor. Danach bist du automatisch dran.
-3. **START**: Ein Takt wird vorgezählt, dann scratchst du.
-   - Der grüne Punkt zeigt, wo deine Hand sein soll. Der orange Punkt zeigt, wo dein Finger ist.
-   - **TON SOLL** und **TON IST** zeigen, ob das Deck gerade klingen soll und ob es klingt.
-4. Nach jedem Takt bekommst du einen Tipp, zum Beispiel „FALSCHE RICHTUNG“, „MEHR BEWEGUNG“, „TON AN/AUS …“ oder „ERST MOTOR STOPPEN“.
-5. Nach vier Takten gibt es 0–3 Sterne. Die beste Wertung wird gespeichert. Mit *** geht es zur nächsten Lektion.
+2. **DEMO:** Der Lehrer spielt die Lektion zwei Takte lang auf dem aktiven Deck vor (oben steht „HÖR ZU“). Danach bist du automatisch dran.
+3. **ÜBEN:** Ein Takt wird vorgezählt („ZÄHL MIT … 1 2 3 4“), dann steht oben „JETZT DU!“.
+4. **Die Spur** läuft von rechts nach links:
+   - Die **grüne Linie** ist deine Hand: oben heißt vor, unten heißt zurück.
+   - Die **orangen Balken** zeigen, wann Ton sein soll.
+   - Der weiße Strich ist **jetzt**. Du siehst also schon, was als Nächstes kommt.
+5. **Die Rückmeldung:**
+   - LEHRER und DU zeigen den grünen Punkt (Soll) und deinen Finger (Ist) auf dem Strip.
+   - **SCHRITT** wird nach jedem Schritt grün mit Haken oder rot mit X.
+   - **TON SOLL** und **TON IST** zeigen, ob das Deck klingen soll und ob es klingt.
+   - Nach jedem Takt gibt es einen Tipp, zum Beispiel „FALSCHE RICHTUNG“, „MEHR BEWEGUNG“, „ZU FRÜH“, „ZU SPÄT“ oder „TON AN/AUS …“.
+   - Nach vier Takten gibt es 0–3 Sterne. Bei *** steigt das Tempo um 6 BPM.
+6. **Vorbereitung durch den Lehrer:** Er stoppt den Motor, stellt CUT passend ein und öffnet den Crossfader zum aktiven Deck.
 
-Beim Start bereitet der Lehrer das Deck vor:
-- Er stoppt den Motor.
-- Er setzt CUT MODE passend zur Lektion.
-- Er öffnet den Crossfader zum aktiven Deck.
-
-Das Tempo stellst du mit BPM ein, den Klick schaltest du mit KLICK an und aus.
-
-Die Presets BABY SCRATCH, DRAG, FORWARD, CHIRP, TRANSFORMER und TEAR stellen das Plugin für Anfänger passend ein und wählen gleich die passende Lektion.
+Die Anfänger-Presets (BABY SCRATCH, DRAG, FORWARD, CHIRP, TRANSFORMER, TEAR) wählen gleich die passende Lektion.
 
 ## Presets
 INIT, BABY SCRATCH, DRAG, FORWARD, CHIRP, TRANSFORMER, TEAR, BATTLE TIGHT, 45 HYPE, DUSTY BELT.
+
+## Bild im MPC-Browser
+Im Plugin-Ordner unter `Plugin Skins/browser_images/` liegen zwei Bilder, nach Akais Muster für die eigenen Plugins:
+- `trackedit.png`: das runde Bild, 64 px, die LP mit JF-Label.
+- `soundsmode.png`: die Kachel im Sounds-Reiter, 270 × 110.
+
+Ob die MPC diese Bilder auch bei externen VST-Plugins anzeigt, ist noch nicht bestätigt.
 
 ## Technik (ehrlich)
 - **Hand:**
@@ -99,9 +110,12 @@ INIT, BABY SCRATCH, DRAG, FORWARD, CHIRP, TRANSFORMER, TEAR, BATTLE TIGHT, 45 HY
   - Das Ziel gleitet über den gemessenen Meldeabstand. Danach glättet eine kritisch gedämpfte Feder die Bewegung, damit kein Zippern entsteht.
   - Am PC getestet: Die Tonhöhe folgt auf ±2 Cent. Aliasing bei 30-facher Geschwindigkeit liegt 30 dB unter dem Ton (6 Mipmap-Stufen).
 - **Speicher:** bis 16 Samples à 15 s, als Mipmap etwa 2× so groß. Mit typischen kurzen Scratch-Samples sind das wenige MB.
-- **Bildschirm:**
-  - Die Live-Werte (Plattenwinkel, Strobe, LEDs, Lehrer) meldet ein Hintergrund-Thread etwa 30× pro Sekunde, nie der Audio-Thread.
-  - Nur das sichtbare Deck dreht sich in der Anzeige.
+- **Threads:** Es gibt drei getrennte Hintergrund-Threads.
+  - Der **Melder** (alle 15 ms) gibt Tastendrücke, Texte und Live-Werte an die MPC weiter.
+  - Der **Lader** lädt Samples und das Vorhören.
+  - Der **Sucher** durchsucht die Laufwerke.
+  - Lader und Sucher laufen mit niedriger Priorität. So bremst eine Laufwerkssuche weder Tasten noch Ton.
+- **Eine Bediengruppe für das aktive Deck:** Die Regler auf dem Bildschirm schreiben in Stellvertreter-Parameter. Das Plugin spiegelt sie zu Deck A oder B, deshalb gibt es keine doppelten, übereinanderliegenden Regler.
 - **Texte:** Die MPC zeigt höchstens 31 Zeichen pro Wert, deshalb sind die Tipps kurz.
 - **Noch nicht auf der MPC getestet:** CPU-Last mit zwei Decks und Lehrer, flüssige Anzeige beim Deckwechsel, Laufwerkspfade der MPC für den Browser.
 

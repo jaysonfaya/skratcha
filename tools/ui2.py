@@ -194,7 +194,7 @@ def deck_maps(style):
         sm = PB.disc(sr_, 4.5 * S)
         _put(A, Hm, Rm, Mm, sm, SILVER, None, 0.25, 1.0)
         Hm[:] = Hm * (1 - sm) + sm * (6 * S + PB.dome(sr_ - 4.5 * S, 2 * S, 3 * S))
-    lcds = [(822, 76, 1266, 130), (1000, 588, 1266, 620)]
+    lcds = [(820, 12, 1268, 60), (998, 594, 1268, 622)]
     for (a0, b0, a1, b1) in lcds:
         ld = PB.rrect(x, y, a0 * S, Yw(b0), a1 * S, Yw(b1), 7 * S)
         lcd = 1 - PB.smoothstep(-1, 1, ld)
@@ -202,27 +202,24 @@ def deck_maps(style):
         _put(A, Hm, Rm, Mm, bez, PB.srgb_to_lin([0.02, 0.02, 0.022]), None, 0.4, 0.3)
         Hm[:] = Hm + bez * 1.0 * S
         _put(A, Hm, Rm, Mm, lcd, PB.srgb_to_lin([0.010, 0.009, 0.007]), 4 * S, 0.04, 0.0)
-    # recessed well for the 8 slot pads
-    wd = PB.rrect(x, y, 818 * S, Yw(136), 1270 * S, Yw(302), 8 * S)
+    # recessed well for the 4 x 4 pad map (exactly like the MPC pads)
+    wd = PB.rrect(x, y, 816 * S, Yw(64), 1272 * S, Yw(344), 8 * S)
     wl = 1 - PB.smoothstep(-1, 1, wd)
     _put(A, Hm, Rm, Mm, wl, PB.srgb_to_lin([0.02, 0.02, 0.022]), None, 0.6, 0.2)
     Hm[:] = Hm - wl * PB.dome(wd, 2.5 * S, 3 * S)
     # crossfader slot
-    cfs = PB.rrect(x, y, 896 * S, Yw(471), 1176 * S, Yw(479), 4 * S)
+    cfs = PB.rrect(x, y, 896 * S, Yw(510), 1176 * S, Yw(518), 4 * S)
     cfm = 1 - PB.smoothstep(-1, 1, cfs)
     _put(A, Hm, Rm, Mm, cfm, PB.srgb_to_lin([0.004, 0.004, 0.004]), -5 * S, 0.9, 0.0)
     for k in range(11):
         xx = 896 + k * 28
-        tk = ((_np.abs(x - xx * S) < 0.7 * S) & (y > Yw(446)) & (y < Yw(454))).astype(_np.float32)
+        tk = ((_np.abs(x - xx * S) < 0.7 * S) & (y > Yw(486)) & (y < Yw(494))).astype(_np.float32)
         _put(A, Hm, Rm, Mm, tk, PAINT_WHITE, None, 0.6, 0.0)
 
-    f12, f11, f14 = font(F_SEMI, 12 * S), font(F_SEMI, 11 * S), font(F_BOLD, 15 * S)
+    f12, f11 = font(F_SEMI, 12 * S), font(F_SEMI, 11 * S)
     panel_ink = [
-        (1044 * S, 134 * S, "SLOTS  =  PADS 1-8", f11, "mm", S),
-        (830 * S, 457 * S, "A", font(F_BOLD, 22 * S), "mm", 0), (1252 * S, 457 * S, "B", font(F_BOLD, 22 * S), "mm", 0),
-        (1036 * S, 432 * S, "CROSSFADER", f12, "mm", 2 * S),
-        (928 * S, 522 * S, "CUT PAD 10", f11, "mm", S), (1094 * S, 522 * S, "HAMSTER", f11, "mm", S), (1211 * S, 522 * S, "CURVE", f11, "mm", S),
-        (906 * S, 584 * S, "TOUCH STRIP", f11, "mm", S),
+        (830 * S, 498 * S, "A", font(F_BOLD, 22 * S), "mm", 0), (1252 * S, 498 * S, "B", font(F_BOLD, 22 * S), "mm", 0),
+        (1036 * S, 476 * S, "CROSSFADER", f12, "mm", 2 * S),
     ]
     st = [s for s in STYLES if s["plinth"] == style][0]
     deck_ink = [(196 * S, 566 * S, "SKRATCHA", font(F_BOLD, 30 * S), "la", 3 * S),
@@ -551,13 +548,13 @@ def draw_info_bg():
     _put(A, Hm, Rm, Mm, foil, FOIL, None, 0.18, 1.0)
     Hm[:] = Hm + PB.blur(foil, 0.8 * S) * 0.9 * S
     items = [(640 * S, 560 * S, "SKRATCHA  ·  CREATOR: JJ DA PLUG", font(F_BOLD, 24 * S), "mm", 3 * S),
-             (640 * S, 592 * S, "VERSION 2.0.0  ·  2 DECKS  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), "mm", S)]
-    left = ["PADS (PROGRAM: PAD 1 = C1)", "1-8   SLOTS DES AKTIVEN DECKS", "9      START / STOP", "10    CUT (FADER)",
-            "11    HOLD (HAND AUF PLATTE)", "12    DECK A / B WECHSELN", "13    CUE   ·   14 SET CUE", "15    REVERSE   ·   16 33/45"]
+             (640 * S, 592 * S, "VERSION 2.1.0  ·  2 DECKS  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), "mm", S)]
+    left = ["PADS = BILDSCHIRM (4 x 4)", "13 DECK A  14 DECK B  15 REV  16 SLIP", "9 CUT   10 HOLD   11 CUE   12 START",
+            "5-8  SAMPLES 5-8", "1-4  SAMPLES 1-4", "HOLD + CUE = CUE SETZEN", "KREIS OBEN LINKS = LAYOUT", "PAD 1 = C1 (SETUP: C#1)"]
     for i, s in enumerate(left):
         items.append((34 * S, (52 + i * 30) * S, s, font(F_BOLD if i == 0 else F_MED, 16 * S), "la", 0))
-    right = ["SO GEHT'S", "TOUCH STRIP AUF PITCH BEND", "STRIP = HAND AUF DER PLATTE", "LOSLASSEN = MOTOR FAENGT",
-             "Q-LINK 1 = CROSSFADER", "LERNEN: DEMO, DANN DU", "BROWSER: DATEI > SLOT TIPPEN", "ALLES ALS MIDI AUFNEHMBAR"]
+    right = ["SO GEHT'S", "TOUCH STRIP AUF PITCH BEND", "STRIP = HAND AUF DER PLATTE", "LOSLASSEN = TELLER LAEUFT WEITER",
+             "SLIP: PLATTE LAEUFT IM HINTERGRUND", "Q-LINK 1 = CROSSFADER", "LERNEN: DEMO, DANN DU", "ALLES ALS MIDI AUFNEHMBAR"]
     for i, s in enumerate(right):
         items.append((1246 * S, (52 + i * 30) * S, s, font(F_BOLD if i == 0 else F_MED, 16 * S), "ra", 0))
     pm = _text_mask(w, h, items)

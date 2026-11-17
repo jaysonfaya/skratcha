@@ -65,6 +65,7 @@ enum Msg
 {
     kMsgIdle = 0, kMsgCountIn, kMsgTouch, kMsgGreat, kMsgDirection, kMsgMore, kMsgLess, kMsgFader, kMsgStill,
     kMsgStars3, kMsgAlmost, kMsgDemo, kMsgMotor, kMsgSilent, kMsgGood, kMsgNoRecord,
+    kMsgEarly, kMsgLate, kMsgTempoUp,
     kNumMsgs
 };
 
@@ -85,6 +86,9 @@ static const char* const kMsgText[kNumMsgs] = {    // max 31 characters (MPC val
     "DECK STUMM - CROSSFADER!",
     "GUT! WEITER SO",
     "ERST EIN SAMPLE LADEN",
+    "ZU FRUEH - WARTE AUF DEN KLICK",
+    "ZU SPAET - FRUEHER UMDREHEN",
+    "*** TEMPO HOCH! WEITER SO",
 };
 
 struct Teacher
@@ -102,6 +106,11 @@ struct Teacher
     int stars = 0, best[kNumLessons] = {0, 0, 0, 0, 0, 0};
     int scorePct = 0, bar = 0;
     bool starsNew = false;
+    int lane = 0;                // 0..31: position in the bar in 1/32 (the scrolling pattern lane)
+    int phase = 0;               // 0 idle, 1 demo (listen), 2 count-in, 3 your turn
+    int countBeat = 0;           // 1..4 during the count-in
+    int hit = 0;                 // result of the last step: 0 none, 1 ok, 2 wrong
+    bool tempoUp = false;        // three stars: the plugin raises the tempo a little
 
     // ---- state ----
     double t = 0.0;              // samples since start (count-in included)
@@ -113,6 +122,8 @@ struct Teacher
     int sumPct = 0, barsInRound = 0;
     float clickEnv = 0.0f, clickPhase = 0.0f, clickInc = 0.0f;
     bool barTouched = false;
+    int lastSign = 0;
+    double lastFlipT = -1e9, stepStartT = 0.0;
 
     void start(int l)
     {
@@ -120,8 +131,9 @@ struct Teacher
         running = true; t = 0.0; stepIdx = -1; bar = 0; barCorrect = 0; sumPct = 0; barsInRound = 0;
         for (int& e : errCount) e = 0;
         msg = demo ? kMsgDemo : kMsgCountIn; stars = 0; scorePct = 0; barTouched = false;
+        hit = 0; lastSign = 0; lastFlipT = -1e9; phase = demo ? 1 : 2; lane = 0; countBeat = 0; tempoUp = false;
     }
-    void stop() { running = false; beat = 0; msg = kMsgIdle; ghost = 0.0f; faderTarget = false; }
+    void stop() { running = false; beat = 0; msg = kMsgIdle; ghost = 0.0f; faderTarget = false; phase = 0; lane = 0; hit = 0; }
 
     static float ease(float a, float b, float f) { return a + (b - a) * (0.5f - 0.5f * std::cos(3.14159265f * f)); }
 
@@ -129,7 +141,7 @@ struct Teacher
     // audible = the active deck is open (fader + crossfader), motorOn = its motor runs, stroke = file samples
     // per strip unit (sign = strip direction), hasRecord = a sample is on the deck.
     // Returns the click sample to mix in.
-    float tick(double x, bool handOn, bool audible, bool motorOn, double stroke, bool hasRecord, double sr)
+    float tick(double x, double vel, bool handOn, bool audible, bool motorOn, double stroke, bool hasRecord, double sr)
     {
         if (!running) return 0.0f;
         const Lesson& L = kLessons[lesson];
@@ -157,8 +169,11 @@ struct Teacher
             clickEnv *= 0.9975f;
         }
 
+        lane = (int)(std::fmod(tt < 0.0 ? 0.0 : tt, barLen) / stepLen * 4.0) & 31;
         if (countIn)
         {
+            phase = 2;
+            countBeat = 1 + (int)(t / (stepLen * 2.0)) % 4;
             beat = 1 + (int)(t / stepLen) % kSteps;
             ghost = L.path[0];
             faderTarget = false;
@@ -168,6 +183,11 @@ struct Teacher
             return out;
         }
 
+        phase = demo ? 1 : 3;
+        // direction changes of the record (for the timing tip)
+        const double thr = std::fabs(stroke) * 0.00002 + 0.02;
+        const int sg = vel > thr ? 1 : (vel < -thr ? -1 : 0);
+        if (sg != 0 && sg != lastSign) { if (lastSign != 0) lastFlipT = tt; lastSign = sg; }
         // ghost & targets
         ghost = ease(L.path[s], L.path[s + 1], (float)inStep);
         const int fp = L.fader[s * 2 + half];
@@ -177,7 +197,7 @@ struct Teacher
         if (s != stepIdx)
         {
             if (stepIdx >= 0) finishStep(stepIdx, x, stroke);
-            stepIdx = s; stepStartX = x;
+            stepIdx = s; stepStartX = x; stepStartT = tt - inStep * stepLen;
             openHalf[0] = openHalf[1] = totalHalf[0] = totalHalf[1] = 0;
             touched = false; motorWasOn = false; silent = true;
         }
@@ -218,9 +238,26 @@ struct Teacher
             const double o = (double)openHalf[h] / (double)totalHalf[h];
             if ((fp == 1 && o < 0.55) || (fp == 0 && o > 0.45)) { ok = false; err = kMsgFader; }
         }
+        // timing: where the hand should turn round at the start of this step, did it turn near the click?
+        if (ok && std::fabs(m) >= 0.05)
+        {
+            const int sp = s > 0 ? s - 1 : kSteps - 1;
+            const double mp = L.path[sp + 1] - L.path[sp];
+            if (mp * m < 0.0 && lastFlipT > -1e8)
+            {
+                double off = lastFlipT - stepStartT;               // < 0 early, > 0 late (samples)
+                if (off > stepLen * 0.5) off -= stepLen * kSteps;  // (wrapped)
+                if (std::fabs(off) < stepLen * 0.9)
+                {
+                    if (off < -0.30 * stepLen) { ok = false; err = kMsgEarly; }
+                    else if (off > 0.30 * stepLen) { ok = false; err = kMsgLate; }
+                }
+            }
+        }
         if (!ok && err == kMsgFader && silent && L.fader[s * 2] < 0) err = kMsgSilent;
         if (motorWasOn) { ok = false; err = kMsgMotor; }
         if (ok) ++barCorrect; else if (err >= 0) ++errCount[err];
+        if (!demo) hit = ok ? 1 : 2;
 
         if (s == kSteps - 1) finishBar();
     }
@@ -232,7 +269,7 @@ struct Teacher
         if (demo) { msg = kMsgDemo; barCorrect = 0; for (int& e : errCount) e = 0; return; }
         // the most useful tip for this bar
         int worst = -1, worstN = 0;
-        const int order[] = {kMsgNoRecord, kMsgMotor, kMsgSilent, kMsgDirection, kMsgFader, kMsgMore, kMsgLess, kMsgStill};
+        const int order[] = {kMsgNoRecord, kMsgMotor, kMsgSilent, kMsgDirection, kMsgFader, kMsgMore, kMsgLess, kMsgStill, kMsgEarly, kMsgLate};
         for (int k : order) if (errCount[k] > worstN) { worst = k; worstN = errCount[k]; }
         if (errCount[kMsgNoRecord] > 0) worst = kMsgNoRecord;
         if (!barTouched) msg = kMsgTouch;
@@ -246,7 +283,7 @@ struct Teacher
             stars = avg >= 85 ? 3 : avg >= 65 ? 2 : avg >= 40 ? 1 : 0;
             if (stars > best[lesson]) best[lesson] = stars;
             starsNew = true;
-            if (stars == 3) msg = kMsgStars3;
+            if (stars == 3) { msg = kMsgTempoUp; tempoUp = true; }
             else if (stars == 2) msg = kMsgAlmost;
             sumPct = 0; barsInRound = 0;
         }

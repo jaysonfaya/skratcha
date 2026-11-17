@@ -60,7 +60,7 @@ int main(int argc, char** argv)
     // parameter indices (keep in sync with SKRATCHA.cpp)
     enum { kLevel = 0, kSample, kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kStripRange, kStripDir, kRelease,
            kSmooth, kCatch, kCurve, kFader, kReverse, kCrackle, kPadBase, kLoop, kScratch, kJog, kAngle,
-           kASlot = 33, kFireMode = 93, kHLesson = 80, kHRun = 81, kHDemo = 82, kHBpm = 83 };
+           kASlot = 33, kFireMode = 93, kAutoRun = 111, kSlip = 110, kHLesson = 80, kHRun = 81, kHDemo = 82, kHBpm = 83 };
     auto logNorm = [](double v, double lo, double hi) { return (float)(std::log(v / lo) / std::log(hi / lo)); };
     setp(kSmooth, logNorm(smoothMs, 0.5, 20.0));
     setp(kLevel, (float)((0.0 + 40.0) / 46.0));
@@ -72,7 +72,9 @@ int main(int argc, char** argv)
     if (scen == "tone_extreme") { setp(kStripRange, 1.0f); }
     if (scen == "fast") seconds = 3.0;
     if (probe) sampleIndex = 8;   // SKRATCHA_TEST_SLOT8 = the probe record
-    setp(kFireMode, 0.0f);                                   // pads only cue (the scenarios start the motor with pad 9)
+    setp(kFireMode, 0.0f);
+    setp(kAutoRun, scen.find("autorun") != std::string::npos || scen.find("slip") != std::string::npos ? 1.0f : 0.0f);
+    if (scen.find("slip") != std::string::npos) setp(kSlip, 1.0f);                                   // pads only cue (the scenarios start the motor with pad 9)
     setp(kASlot, (float)(std::min(sampleIndex, 8) - 1) / 7.0f);
     setp(kLoop, 1.0f);
     if (scen == "lesson_demo") { setp(kHLesson, 0.0f); setp(kHDemo, 1.0f); seconds = 8.0; }
@@ -103,11 +105,11 @@ int main(int argc, char** argv)
         pb((int)(t1 * sr), 0.0);
     };
 
-    if (scen == "baby" || scen == "tone_baby") gesture(0.3, 3.3, 1.5, 0.35, -0.5);
+    if (scen == "baby" || scen == "tone_baby" || scen == "autorun") gesture(0.3, 3.3, 1.5, 0.35, -0.5);
     else if (scen == "fast" || scen == "tone_fast" || scen == "tone_extreme") gesture(0.2, 2.7, 6.0, 0.45, -0.6);
-    else if (scen == "hold_release")
+    else if (scen == "hold_release" || scen == "slip")
     {
-        note(0, 44, true); note(100, 44, false);                 // motor on (pad 9)
+        note(0, 47, true); note(100, 47, false);                 // motor on (pad 12)
         pb((int)(1.0 * sr), -0.3);                               // grab and hold still for 0.5 s
         for (double t = 1.0; t < 1.5; t += evStep / sr) pb((int)(t * sr), -0.3);
         // drag back a quarter of the strip, then release: the record is caught by the motor
@@ -119,10 +121,10 @@ int main(int argc, char** argv)
         // break-style routine on the AHH: baby scratches, transformer cuts with pad 37, a chirp, then release on the motor
         gesture(0.2, 2.2, 1.0, 0.3, -0.4);
         gesture(2.4, 4.4, 2.0, 0.3, -0.4);
-        for (int k = 0; k < 16; ++k) { note((int)((4.6 + k * 0.0625) * sr), 45, true); note((int)((4.6 + k * 0.0625 + 0.03) * sr), 45, false); }
+        for (int k = 0; k < 16; ++k) { note((int)((4.6 + k * 0.0625) * sr), 44, true); note((int)((4.6 + k * 0.0625 + 0.03) * sr), 44, false); }
         gesture(4.6, 5.6, 2.0, 0.35, -0.45);
         gesture(5.9, 7.4, 4.0, 0.25, -0.3);
-        note((int)(7.6 * sr), 44, true); note((int)(7.6 * sr) + 200, 44, false);   // motor on
+        note((int)(7.6 * sr), 47, true); note((int)(7.6 * sr) + 200, 47, false);   // motor on
         gesture(8.4, 9.0, 1.5, 0.2, -0.2);
     }
     else if (practice)
@@ -142,8 +144,8 @@ int main(int argc, char** argv)
         if (scen.find("forward") != std::string::npos)
             for (int k = 0; k < 32; k += 2)   // pad 10 held on the forward strokes (CUT MODE = OPEN from the lesson)
             {
-                note((int)((3.0 + k * st + 0.01) * sr), 45, true);
-                note((int)((3.0 + (k + 1) * st - (scen == "practice_forward_late" ? -0.2 : 0.01)) * sr), 45, false);
+                note((int)((3.0 + k * st + 0.01) * sr), 44, true);
+                note((int)((3.0 + (k + 1) * st - (scen == "practice_forward_late" ? -0.2 : 0.01)) * sr), 44, false);
             }
     }
     else if (scen == "jog")
