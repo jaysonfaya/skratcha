@@ -269,7 +269,7 @@ def read_lessons():
         path = [float(v.strip().rstrip("f")) for v in m.group(3).split(",")]
         fad = [int(v) for v in m.group(4).split(",")]
         out.append({"name": m.group(1), "path": path, "fader": fad})
-    assert len(out) == len(LESSONS), out
+    assert len(out) in (len(LESSONS), len(LESSONS) - 1), out
     return out
 
 

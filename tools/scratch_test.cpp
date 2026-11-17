@@ -77,9 +77,9 @@ int main(int argc, char** argv)
     if (scen.find("slip") != std::string::npos) setp(kSlip, 1.0f);                                   // pads only cue (the scenarios start the motor with pad 9)
     setp(kASlot, (float)(std::min(sampleIndex, 8) - 1) / 7.0f);
     setp(kLoop, 1.0f);
-    if (scen == "lesson_demo") { setp(kHLesson, 0.0f); setp(kHDemo, 1.0f); seconds = 8.0; }
+    if (scen == "lesson_demo") { setp(kHLesson, 1.0f / 6.0f); setp(kHDemo, 1.0f); seconds = 8.0; }
     const bool practice = scen.rfind("practice", 0) == 0;   // practice_good | practice_wrong | practice_none
-    if (practice) { setp(kHLesson, scen.find("forward") != std::string::npos ? 2.0f / 5.0f : 0.0f); setp(kHRun, 1.0f); seconds = 3.0 + 12.0 + 0.5; }
+    if (practice) { setp(kHLesson, scen.find("forward") != std::string::npos ? 3.0f / 6.0f : 1.0f / 6.0f); setp(kHRun, 1.0f); seconds = 3.0 + 12.0 + 0.5; }
     std::this_thread::sleep_for(std::chrono::milliseconds(200));   // let the background thread load the record
 
     const int total = (int)(seconds * sr);

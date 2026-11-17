@@ -65,7 +65,7 @@ enum Msg
 {
     kMsgIdle = 0, kMsgCountIn, kMsgTouch, kMsgGreat, kMsgDirection, kMsgMore, kMsgLess, kMsgFader, kMsgStill,
     kMsgStars3, kMsgAlmost, kMsgDemo, kMsgMotor, kMsgSilent, kMsgGood, kMsgNoRecord,
-    kMsgEarly, kMsgLate, kMsgTempoUp,
+    kMsgEarly, kMsgLate, kMsgTempoUp, kMsgTour,
     kNumMsgs
 };
 
@@ -89,6 +89,24 @@ static const char* const kMsgText[kNumMsgs] = {    // max 31 characters (MPC val
     "ZU FRUEH - WARTE AUF DEN KLICK",
     "ZU SPAET - FRUEHER UMDREHEN",
     "*** TEMPO HOCH! WEITER SO",
+    "SCHAU AUFS MPC-BILD: ES LEUCHTET",
+};
+
+// ---- lesson 0: the basics tour. Every step waits until you have really done it. ----
+struct TourStep { const char* line1; const char* line2; };
+constexpr int kTourSteps = 10;
+static const TourStep kTour[kTourSteps + 1] = {     // max 31 characters per line
+    {"1/10  DRUECK START (PAD 12)",   "DER TELLER DREHT SICH"},
+    {"2/10  NOCHMAL PAD 12 = STOP",   "DER TELLER BREMST AB"},
+    {"3/10  TIPP EIN SAMPLE (PAD 1-8)", "ES LIEGT JETZT AUF DER PLATTE"},
+    {"4/10  BERUEHRE DEN TOUCH STRIP", "= HAND AUF DER PLATTE"},
+    {"5/10  FINGER VOR UND ZURUECK",  "DAS IST SCRATCHEN!"},
+    {"6/10  FINGER WEG VOM STRIP",    "DER TELLER LAEUFT WEITER"},
+    {"7/10  HALTE CUT (PAD 9)",       "SOLANGE DU HAELTST: KEIN TON"},
+    {"8/10  Q-LINK 1 NACH RECHTS",    "CROSSFADER ZU DECK B"},
+    {"9/10  DECK B WAEHLEN (PAD 14)", "STRIP + PADS = JETZT DECK B"},
+    {"10/10 ZURUECK ZU DECK A (13)",  "UND CROSSFADER NACH LINKS"},
+    {"FERTIG! DU KENNST ALLES",       "WEITER: LEKTION 1 BABY SCRATCH"},
 };
 
 struct Teacher
@@ -111,6 +129,9 @@ struct Teacher
     int countBeat = 0;           // 1..4 during the count-in
     int hit = 0;                 // result of the last step: 0 none, 1 ok, 2 wrong
     bool tempoUp = false;        // three stars: the plugin raises the tempo a little
+    int sync = 0;                // 0..10: how well your hand direction follows the ghost (live meter)
+    float prevGhost = 0.0f, syncAcc = 0.0f;
+    int agOk = 0, agTot = 0;
 
     // ---- state ----
     double t = 0.0;              // samples since start (count-in included)
@@ -132,6 +153,7 @@ struct Teacher
         for (int& e : errCount) e = 0;
         msg = demo ? kMsgDemo : kMsgCountIn; stars = 0; scorePct = 0; barTouched = false;
         hit = 0; lastSign = 0; lastFlipT = -1e9; phase = demo ? 1 : 2; lane = 0; countBeat = 0; tempoUp = false;
+        sync = 0; syncAcc = 0.0f; agOk = agTot = 0; prevGhost = kLessons[lesson].path[0];
     }
     void stop() { running = false; beat = 0; msg = kMsgIdle; ghost = 0.0f; faderTarget = false; phase = 0; lane = 0; hit = 0; }
 
@@ -190,6 +212,9 @@ struct Teacher
         if (sg != 0 && sg != lastSign) { if (lastSign != 0) lastFlipT = tt; lastSign = sg; }
         // ghost & targets
         ghost = ease(L.path[s], L.path[s + 1], (float)inStep);
+        // continuous check: does the record move the way the ghost moves, right now?
+        const float gv = ghost - prevGhost; prevGhost = ghost;
+        if (std::fabs(gv) > 2e-7f && handOn) { ++agTot; if (vel * gv * (stroke >= 0.0 ? 1.0 : -1.0) > 0.0) ++agOk; }
         const int fp = L.fader[s * 2 + half];
         faderTarget = fp != 0;
         beat = s + 1;
@@ -198,6 +223,7 @@ struct Teacher
         {
             if (stepIdx >= 0) finishStep(stepIdx, x, stroke);
             stepIdx = s; stepStartX = x; stepStartT = tt - inStep * stepLen;
+            agOk = agTot = 0;
             openHalf[0] = openHalf[1] = totalHalf[0] = totalHalf[1] = 0;
             touched = false; motorWasOn = false; silent = true;
         }
@@ -253,6 +279,14 @@ struct Teacher
                     else if (off > 0.30 * stepLen) { ok = false; err = kMsgLate; }
                 }
             }
+        }
+        // the whole step, not just start and end: at least 60 % of the moving time in the right direction
+        if (ok && agTot > (int)(stepLen * 0.25) && agOk < (int)(0.6 * agTot)) { ok = false; err = kMsgDirection; }
+        if (agTot > 0 || std::fabs(m) >= 0.05)
+        {
+            const float a = agTot > 0 ? (float)agOk / (float)agTot : 0.0f;
+            syncAcc = syncAcc * 0.6f + a * 0.4f;
+            sync = (int)(syncAcc * 10.0f + 0.5f);
         }
         if (!ok && err == kMsgFader && silent && L.fader[s * 2] < 0) err = kMsgSilent;
         if (motorWasOn) { ok = false; err = kMsgMotor; }

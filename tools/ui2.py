@@ -57,6 +57,44 @@ def _plinth(style, Ww, Hw):
         Hm += PB.fbm(Ww, Hw, 4, 5, 6.0) * 0.18 + PB.fbm(Ww, Hw, 5, 3, 200.0) * 0.06     # fine textured powder coat
         Rm += PB.fbm(Ww, Hw, 6, 3, 40.0) * 0.05
         ink = (226, 228, 232, 235)
+    elif style in ("oak", "mahogany"):   # dark oak / glossy mahogany with lacquer
+        x, y = PB.grid(Ww, Hw)
+        warp = PB.fbm(Ww, Hw, 18, 3, 600.0) * 26.0 + PB.fbm(Ww, Hw, 19, 2, 100.0) * 3.0
+        fine = _np.sin((y + warp) * 2 * _np.pi / 6.0)
+        broad = _np.sin((y + warp * 1.4) * 2 * _np.pi / 55.0)
+        g = PB.brushed(Ww, Hw, 17, length=900, strength=1.0); g = (g - g.min()) / (g.max() - g.min() + 1e-6)
+        t = _np.clip(0.45 + 0.08 * fine + 0.14 * broad + 0.5 * (g - 0.5), 0, 1)
+        if style == "oak":
+            dark = PB.srgb_to_lin([0.10, 0.065, 0.035]); light = PB.srgb_to_lin([0.30, 0.20, 0.10]); rough = 0.38
+        else:
+            dark = PB.srgb_to_lin([0.16, 0.035, 0.025]); light = PB.srgb_to_lin([0.42, 0.12, 0.07]); rough = 0.14
+        A = (dark[None, None, :] * (1 - t[..., None]) + light[None, None, :] * t[..., None]).astype(_np.float32)
+        Hm = (fine * 0.04 + PB.white(Ww, Hw, 10) * 0.008).astype(_np.float32)
+        Rm = _np.full((Hw, Ww), rough, _np.float32)
+        Mm = _np.zeros((Hw, Ww), _np.float32)
+        ink = (240, 214, 150, 235)
+    elif style == "bakelite":
+        A, Hm, Rm, Mm = _maps(Ww, Hw, PB.srgb_to_lin([0.07, 0.045, 0.03]), 0.0, 0.12, 0.0)
+        Hm += PB.fbm(Ww, Hw, 21, 3, 300.0) * 0.25
+        A[:] = A * (1 + PB.fbm(Ww, Hw, 22, 4, 80.0)[..., None] * 0.25)
+        ink = (230, 200, 140, 235)
+    elif style == "leather":   # 1960s suitcase: teal leatherette
+        A, Hm, Rm, Mm = _maps(Ww, Hw, PB.srgb_to_lin([0.10, 0.36, 0.38]), 0.0, 0.6, 0.0)
+        Hm += PB.fbm(Ww, Hw, 23, 5, 5.0) * 0.5
+        A[:] = A * (1 + PB.fbm(Ww, Hw, 24, 3, 200.0)[..., None] * 0.08)
+        ink = (245, 238, 220, 240)
+    elif style == "gunmetal":
+        A, Hm, Rm, Mm = _maps(Ww, Hw, PB.srgb_to_lin([0.20, 0.205, 0.215]), 0.0, 0.32, 1.0)
+        Hm += PB.brushed(Ww, Hw, 25, length=500, strength=0.16) + PB.white(Ww, Hw, 26) * 0.01
+        ink = (232, 190, 90, 240)
+    elif style == "white":
+        A, Hm, Rm, Mm = _maps(Ww, Hw, PB.srgb_to_lin([0.86, 0.87, 0.88]), 0.0, 0.18, 0.0)
+        Hm += PB.fbm(Ww, Hw, 27, 3, 400.0) * 0.05
+        ink = (40, 90, 170, 240)
+    elif style == "glass":
+        A, Hm, Rm, Mm = _maps(Ww, Hw, PB.srgb_to_lin([0.015, 0.016, 0.02]), 0.0, 0.05, 0.0)
+        Hm += PB.fbm(Ww, Hw, 28, 2, 900.0) * 0.03
+        ink = (90, 240, 255, 245)
     else:   # walnut veneer, satin lacquer
         x, y = PB.grid(Ww, Hw)
         warp = PB.fbm(Ww, Hw, 8, 3, 700.0) * 22.0 + PB.fbm(Ww, Hw, 12, 2, 120.0) * 3.0
@@ -74,10 +112,13 @@ def _plinth(style, Ww, Hw):
     return A, Hm, Rm, Mm, ink
 
 
-def deck_maps(style):
+def deck_maps(style, design=None):
     S = SS
     Ww, Hw, x, y = _wgrid(S)
+    design = design or {}
     A, Hm, Rm, Mm, ink = _plinth(style, Ww, Hw)
+    vin = design.get("vinyl", {"col": [0.014, 0.014, 0.016], "rough": 0.14, "kind": "plain"})
+    lab_col = PB.srgb_to_lin(design.get("label", [0.42, 0.045, 0.05]))
     Yw = lambda ly: O3.Y(ly) * S
 
     # ---------------- platter, slipmat, the LP
@@ -115,13 +156,29 @@ def deck_maps(style):
     leadin = PB.ring(r, (R_LP - 5) * S, R_LP * S, 0.8)
     runout = PB.ring(r, (R_LAB + 4) * S, 104 * S, 1.2)
     grooves = PB.radial_value(r, 35, scale=1.8, amp=1.0, smooth=1) * (1 - gap) * (1 - runout) * (1 - leadin) * 0.05 * S
-    _put(A, Hm, Rm, Mm, lp, PB.srgb_to_lin([0.014, 0.014, 0.016]), None, 0.14, 0.0)
-    Rm[:] = Rm * (1 - lp) + lp * (0.13 + 0.10 * (1 - gap) * (1 - runout) * (1 - leadin) - 0.06 * runout)
+    vcol = PB.srgb_to_lin(vin["col"])
+    _put(A, Hm, Rm, Mm, lp, vcol, None, vin["rough"], 0.0)
+    if vin["kind"] == "marble":
+        mb = PB.fbm(Ww, Hw, 61, 5, 40.0); mb = (mb - mb.min()) / (mb.max() - mb.min() + 1e-6)
+        swirl = _np.sin((mb * 9.0 + _np.arctan2(py, px) * 2.0)) * 0.5 + 0.5
+        c2 = PB.srgb_to_lin(vin["col2"])
+        mix = (swirl ** 3 * lp)[..., None]
+        A[:] = A * (1 - mix) + c2[None, None, :] * mix
+    elif vin["kind"] == "timecode":
+        band_ = (_np.sin(r / S * 2 * _np.pi / 1.6) > 0.3).astype(_np.float32)
+        tc = PB.ring(r, 110 * S, (R_LP - 8) * S, 1.0) * band_ * 0.55
+        c2 = PB.srgb_to_lin(vin["col2"])
+        A[:] = A * (1 - tc[..., None]) + c2[None, None, :] * tc[..., None]
+    elif vin["kind"] == "splatter":
+        sp = (PB.blur(PB.white(Ww, Hw, 63), 1.6 * S) > 0.085).astype(_np.float32) * lp
+        c2 = PB.srgb_to_lin(vin["col2"])
+        A[:] = A * (1 - sp[..., None]) + c2[None, None, :] * sp[..., None]
+    Rm[:] = Rm * (1 - lp) + lp * (vin["rough"] - 0.01 + 0.10 * (1 - gap) * (1 - runout) * (1 - leadin) - 0.06 * runout)
     rim = PB.smoothstep((R_LP - 2.5) * S, R_LP * S, r)
     hlp = Z_LP * S - rim ** 2 * 1.6 * S + grooves - leadin * 0.25 * S
     # label (raised a little), red paper; the turning print is the label film strip
     lab = PB.disc(r, R_LAB * S, 0.8)
-    _put(A, Hm, Rm, Mm, lab, LAB_RED, None, 0.65, 0.0)
+    _put(A, Hm, Rm, Mm, lab, lab_col, None, 0.65, 0.0)
     hlab = Z_LAB * S + PB.fbm(Ww, Hw, 37, 5, 24.0) * 0.10 * S
     spindle = PB.disc(r, 4.2 * S, 0.6)
     _put(A, Hm, Rm, Mm, spindle, SILVER_BRIGHT, None, 0.08, 1.0)
@@ -149,7 +206,9 @@ def deck_maps(style):
     bx, by = 708 * S, Yw(124)
     br = _np.sqrt((x - bx) ** 2 + (y - by) ** 2)
     ringo = PB.disc(br, 94 * S)
-    _put(A, Hm, Rm, Mm, ringo, SILVER_BRIGHT if style != "black" else PB.srgb_to_lin([0.08, 0.08, 0.085]), None, 0.12, 1.0)
+    ring_col = {"black": [0.08, 0.08, 0.085], "glass": [0.05, 0.05, 0.06], "oak": [0.75, 0.55, 0.25], "bakelite": [0.72, 0.52, 0.24],
+                "gunmetal": [0.70, 0.55, 0.22]}.get(style)
+    _put(A, Hm, Rm, Mm, ringo, PB.srgb_to_lin(ring_col) if ring_col else SILVER_BRIGHT, None, 0.12, 1.0)
     Hm[:] = Hm * (1 - ringo) + ringo * (PB.dome(br - 94 * S, 12 * S, 6 * S) + PB.radial_value(br, 23, 1.0, 0.05 * S))
     well = PB.disc(br, 80 * S)
     _put(A, Hm, Rm, Mm, well, PB.srgb_to_lin([0.16, 0.16, 0.17]), None, 0.30, 0.8)
@@ -180,7 +239,7 @@ def deck_maps(style):
         yk = PITCH_Y + 20 + (8 - k) / 16 * (PITCH_H - 40)
         ink2.append(((PITCH_X - 4) * S, (yk + 4) * S, lab_, font(F_SEMI, 10 * S), "rs", 0))
         tick = ((_np.abs(y - Yw(yk)) < 0.7 * S) & (x > (PITCH_X + 16) * S) & (x < (PITCH_X + 26) * S)).astype(_np.float32)
-        _put(A, Hm, Rm, Mm, tick, INK_DARK if style == "silver" else PAINT_WHITE, None, 0.6, 0.0)
+        _put(A, Hm, Rm, Mm, tick, INK_DARK if style in ("silver", "white") else PAINT_WHITE, None, 0.6, 0.0)
     ink2.append(((PITCH_X + PITCH_W / 2) * S, (PITCH_Y - 8) * S, "PITCH", font(F_SEMI, 11 * S), "mm", S))
 
     # ---------------- the battle mixer: black anodised plate, LCD glass, crossfader slot, slot-pad well
@@ -221,22 +280,27 @@ def deck_maps(style):
         (830 * S, 498 * S, "A", font(F_BOLD, 22 * S), "mm", 0), (1252 * S, 498 * S, "B", font(F_BOLD, 22 * S), "mm", 0),
         (1036 * S, 476 * S, "CROSSFADER", f12, "mm", 2 * S),
     ]
-    st = [s for s in STYLES if s["plinth"] == style][0]
-    deck_ink = [(196 * S, 566 * S, "SKRATCHA", font(F_BOLD, 30 * S), "la", 3 * S),
-                (200 * S, 592 * S, st["sub"], font(F_SEMI, 11 * S), "la", S)]
+    deck_ink = []
     an = (lip + step) * 0.8 + band * 0.4 + ringo * (1 - well) * 0.7 + lp * (1 - lab) * (1 - gap * 0.85) * (1 - runout) * 0.9
     maps = {"albedo": A, "H": Hm, "rough": Rm, "metal": Mm, "aniso": an, "center": (pcx, pcy)}
     maps = O3.prepare(maps, shadow_steps=40, ao_radius=14 * S, ao_strength=0.05)
     return maps, ink, deck_ink + ink2, panel_ink
 
 
-def draw_deck(style):
+def draw_deck(style, design=None):
     S = SS
-    maps, ink, deck_ink, panel_ink = deck_maps(style)
+    maps, ink, deck_ink, panel_ink = deck_maps(style, design)
     pcx, pcy = maps["center"]
     rgb, _, (hx, hy, hz) = O3.render(maps, W * S, H * S, 0, 0, aniso=(maps["aniso"], pcx, pcy, 1.0), side=_side_fn(maps, None, S))
     img = PB.to_image(rgb)
     _glow(img, 96 * S, int(O3.screen_v(O3.Y(452) * S, 0)), 70 * S, (255, 40, 20), 85)
+    if design and design.get("neon"):
+        # LED ring around the platter and a glowing record edge
+        g = Image.new("RGBA", img.size, (0, 0, 0, 0)); gd = ImageDraw.Draw(g)
+        cxs, cys = CX * S, O3.screen_v(O3.Y(CY) * S, Z_PLATTER * S)
+        for rad, col, wdt in [((R_PLATTER + 6) * S, (40, 230, 255, 255), 5 * S), ((R_LP + 1) * S, (255, 60, 220, 200), 3 * S)]:
+            gd.ellipse([cxs - rad, cys - rad * O3.COS, cxs + rad, cys + rad * O3.COS], outline=col, width=int(wdt))
+        img.alpha_composite(g.filter(ImageFilter.GaussianBlur(6 * S))); img.alpha_composite(g)
     d = ImageDraw.Draw(img)
     for (xx, yy, t_, f_, anc, sp_) in deck_ink:
         text(d, (xx, yy), t_, f_, ink, anc, sp_)
@@ -245,7 +309,8 @@ def draw_deck(style):
     return down(img), maps, (hx, hy, hz), rgb
 
 
-def draw_label_frames(maps, hits):
+def draw_label_frames(maps, hits, design=None):
+    design = design or {}
     """the LP label: red paper with the gold JF logo and a foil ring, turning; shaded on the deck's 3D hits"""
     S = SS
     hx, hy, hz = hits
@@ -269,7 +334,7 @@ def draw_label_frames(maps, hits):
     ad.ellipse([c - 74 * S, c - 74 * S, c + 74 * S, c + 74 * S], outline=(255, 255, 255, 255), width=int(0.8 * S))
     fs = font(F_BOLD, 9 * S)
     # small curved print along the bottom: SKRATCHA · 33 1/3 RPM · SIDE A
-    msg = "SKRATCHA RECORDS  ·  33 1/3 RPM  ·  STEREO  ·  JJ DA PLUG"
+    msg = design.get("label_text", "SKRATCHA RECORDS  ·  33 1/3 RPM  ·  STEREO  ·  JJ DA PLUG")
     ang0 = math.radians(200)
     span = math.radians(140)
     for i, ch in enumerate(msg):
@@ -285,6 +350,19 @@ def draw_label_frames(maps, hits):
     speck = PB.blur(PB.white(T, T, 91), 0.7 * S)
     frames = []
     base_maps = {"albedo": maps["albedo"], "rough": maps["rough"], "metal": maps["metal"], "gx": maps["gx"], "gy": maps["gy"]}
+    design = design or {}
+    def shade_flat(col, rough, metal):
+        return O3.shade_hits({"albedo": _np.zeros_like(maps["albedo"]) + col, "rough": _np.full_like(maps["rough"], rough),
+                              "metal": (_np.ones_like if metal else _np.zeros_like)(maps["metal"]), "gx": maps["gx"], "gy": maps["gy"]},
+                             shx, shy, shz, shadows=maps["shadow"], ao=maps["ao"])
+    paper1 = shade_flat(PB.srgb_to_lin(design.get("label", [0.42, 0.045, 0.05])), 0.62, False)
+    paper2 = shade_flat(PB.srgb_to_lin(design["label2"]), 0.5, False) if design.get("label2") else None
+    lmetal = design.get("logo_metal", True)
+    gold = shade_flat(PB.srgb_to_lin(design.get("logo", [1.0, 0.80, 0.42])), 0.22 if lmetal else 0.55, lmetal)
+    if design.get("logo_glow"):
+        gold = gold * 0.4 + PB.srgb_to_lin(design.get("logo", [1, 1, 1]))[None, None, :] * 1.6
+    gx_t, gy_t = _np.meshgrid(_np.arange(T, dtype=_np.float32), _np.arange(T, dtype=_np.float32))
+    grad = _np.clip((gx_t + gy_t) / (2.0 * T), 0, 1)       # diagonal gradient across the label (turns with it)
     for k in range(LABEL_FRAMES):
         ang = math.radians(k * 360.0 / LABEL_FRAMES)       # clockwise as seen from above
         ca, sa = math.cos(-ang), math.sin(-ang)
@@ -292,13 +370,11 @@ def draw_label_frames(maps, hits):
         uy = dx * sa + dy * ca + c
         fm = O3.remap(foil, ux, uy, _cv2.BORDER_CONSTANT)
         sp = O3.remap(speck, ux, uy, _cv2.BORDER_CONSTANT)
-        # paper and foil shaded separately with the deck's normals and shadows, then mixed by the artwork
-        paper = O3.shade_hits({"albedo": _np.zeros_like(maps["albedo"]) + LAB_RED, "rough": _np.full_like(maps["rough"], 0.62),
-                               "metal": _np.zeros_like(maps["metal"]), "gx": maps["gx"], "gy": maps["gy"]},
-                              shx, shy, shz, shadows=maps["shadow"], ao=maps["ao"]) * (1 + 0.05 * sp)[..., None]
-        gold = O3.shade_hits({"albedo": _np.zeros_like(maps["albedo"]) + FOIL, "rough": _np.full_like(maps["rough"], 0.22),
-                              "metal": _np.ones_like(maps["metal"]), "gx": maps["gx"], "gy": maps["gy"]},
-                             shx, shy, shz, shadows=maps["shadow"], ao=maps["ao"])
+        paper = paper1
+        if paper2 is not None:
+            gt = O3.remap(grad, ux, uy, _cv2.BORDER_REPLICATE)[..., None]
+            paper = paper1 * (1 - gt) + paper2 * gt
+        paper = paper * (1 + 0.05 * sp)[..., None]
         rgb = paper * (1 - fm[..., None]) + gold * fm[..., None]
         # spindle stays chrome (rotationally symmetric)
         spin = (rr < 4.6 * S)
@@ -548,9 +624,10 @@ def draw_info_bg():
     _put(A, Hm, Rm, Mm, foil, FOIL, None, 0.18, 1.0)
     Hm[:] = Hm + PB.blur(foil, 0.8 * S) * 0.9 * S
     items = [(640 * S, 560 * S, "SKRATCHA  ·  CREATOR: JJ DA PLUG", font(F_BOLD, 24 * S), "mm", 3 * S),
-             (640 * S, 592 * S, "VERSION 2.1.0  ·  2 DECKS  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), "mm", S)]
+             (640 * S, 592 * S, "VERSION 2.2.0  ·  10 TURNTABLES  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), "mm", S)]
     left = ["PADS = BILDSCHIRM (4 x 4)", "13 DECK A  14 DECK B  15 REV  16 SLIP", "9 CUT   10 HOLD   11 CUE   12 START",
-            "5-8  SAMPLES 5-8", "1-4  SAMPLES 1-4", "HOLD + CUE = CUE SETZEN", "KREIS OBEN LINKS = LAYOUT", "PAD 1 = C1 (SETUP: C#1)"]
+            "1-8  SAMPLES (5-8 UEBER 1-4)", "BATTLE: LINKS A, RECHTS B (GESPIEGELT)", "HOLD + CUE = CUE SETZEN",
+            "ANSICHT-TASTE = LAYOUT", "RUNDE LEUCHTE = TURNTABLE-AERA"]
     for i, s in enumerate(left):
         items.append((34 * S, (52 + i * 30) * S, s, font(F_BOLD if i == 0 else F_MED, 16 * S), "la", 0))
     right = ["SO GEHT'S", "TOUCH STRIP AUF PITCH BEND", "STRIP = HAND AUF DER PLATTE", "LOSLASSEN = TELLER LAEUFT WEITER",

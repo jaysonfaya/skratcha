@@ -179,12 +179,72 @@ def horn():
     return norm(x * env_adsr(n, 0.03, 0.12, 0.8, 0.35))
 
 
+def word(segments, f0s, breath=0.03):
+    """formant speech: segments = list of (dur_s, kind, F_from, F_to, gain) with kind 'v' voiced, 'n' noise, 'b' burst, 'm' nasal"""
+    out = []
+    pit = np.concatenate([np.linspace(a, b, int(d * SR)) for (d, _, _, _, _), (a, b) in zip(segments, f0s)])
+    pos = 0
+    for (dur, kind, ff, ft, g) in segments:
+        n = int(dur * SR)
+        if kind in ("v", "m"):
+            src = glottal(pit[pos:pos + n], n) + breath * rng.standard_normal(n)
+            bws = [70, 90, 120] if kind == "v" else [140, 300, 400]
+            y = formant_glide(src, ff, ft, bws, [1.0, 0.6, 0.25] if kind == "v" else [1.0, 0.15, 0.05])
+            y = y / (np.max(np.abs(y)) + 1e-9) * g
+            e = np.ones(n); a = min(n // 4, int(0.012 * SR)); e[:a] = np.linspace(0, 1, a); e[-a:] = np.linspace(1, 0, a)
+            y = y * e
+        elif kind == "n":
+            lo, hi = ff[0], ft[0]
+            y = lfilter(*butter(2, [lo / (SR / 2), hi / (SR / 2)], btype="band"), rng.standard_normal(n))
+            y = y / (np.max(np.abs(y)) + 1e-9) * g * np.sin(np.linspace(0, np.pi, n)) ** 0.7
+        else:   # burst
+            y = lfilter(*butter(2, [ff[0] / (SR / 2), ft[0] / (SR / 2)], btype="band"), rng.standard_normal(n)) * np.exp(-np.arange(n) / (0.006 * SR))
+            y = y / (np.max(np.abs(y)) + 1e-9) * g
+        out.append(y)
+        pos += n
+    x = np.concatenate(out)
+    x = np.tanh(1.6 * x / (np.max(np.abs(x)) + 1e-9))       # a little grit, like a rap vocal
+    return norm(x)
+
+
+def yeah():
+    return word([(0.07, "v", [300, 2200, 3000], [450, 2000, 2800], 0.7), (0.22, "v", [450, 2000, 2800], [650, 1500, 2600], 1.0),
+                 (0.16, "v", [650, 1500, 2600], [600, 1250, 2500], 0.8)], [(190, 200), (200, 175), (175, 140)])
+
+
+def hey():
+    return word([(0.08, "n", [600], [3500], 0.5), (0.30, "v", [520, 1850, 2600], [380, 2250, 2900], 1.0)], [(220, 220), (225, 245)], breath=0.08)
+
+
+def uh():
+    return word([(0.03, "n", [400], [2500], 0.3), (0.20, "v", [650, 1200, 2500], [600, 1150, 2400], 1.0)], [(150, 150), (150, 120)])
+
+
+def go():
+    return word([(0.025, "b", [300], [2500], 0.9), (0.33, "v", [500, 950, 2400], [360, 720, 2300], 1.0)], [(170, 170), (175, 135)])
+
+
+def come_on():
+    return word([(0.03, "b", [1500], [4000], 0.8), (0.12, "v", [650, 1250, 2500], [600, 1150, 2400], 1.0), (0.07, "m", [260, 1000, 2200], [260, 1000, 2200], 0.5),
+                 (0.20, "v", [700, 1100, 2500], [650, 1050, 2450], 1.0), (0.10, "m", [280, 1500, 2500], [260, 1400, 2400], 0.4)],
+                [(165, 175), (175, 165), (160, 190), (195, 160), (160, 140)])
+
+
+def check_it():
+    return word([(0.04, "n", [2000], [6000], 0.6), (0.12, "v", [500, 1900, 2600], [450, 2000, 2600], 1.0), (0.03, "b", [1500], [4000], 0.7),
+                 (0.10, "v", [400, 2100, 2800], [380, 2200, 2900], 0.9), (0.03, "b", [3000], [7000], 0.6)],
+                [(180, 180), (185, 175), (175, 175), (170, 160), (160, 160)])
+
+
 def main():
     out = os.path.join(sys.argv[1] if len(sys.argv) > 1 else ".", "Samples")
     os.makedirs(out, exist_ok=True)
-    for name, fn in [("01 AHH", ahh), ("02 OOH WAH", ooh_wah), ("03 STAB", stab), ("04 TONE 1K", tone),
-                     ("05 BREAK 92", brk), ("06 BASS DROP", bass_drop),
-                     ("07 FRESH", fresh), ("08 HORN", horn)]:
+    for f in os.listdir(out):
+        if f.endswith(".wav"):
+            os.remove(os.path.join(out, f))
+    for name, fn in [("01 AHH", ahh), ("02 FRESH", fresh), ("03 YEAH", yeah), ("04 HEY", hey), ("05 UH", uh), ("06 GO", go),
+                     ("07 COME ON", come_on), ("08 CHECK IT", check_it), ("09 BREAK 92", brk), ("10 STAB", stab),
+                     ("11 HORN", horn), ("12 BASS DROP", bass_drop), ("13 OOH WAH", ooh_wah), ("14 TONE 1K", tone)]:
         x = fn()
         pad = np.zeros(int(0.05 * SR))   # a short lead-in so a scratch starts from silence
         x = np.concatenate([pad, x, pad])
