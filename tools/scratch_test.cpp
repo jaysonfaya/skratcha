@@ -59,7 +59,8 @@ int main(int argc, char** argv)
     auto setp = [&](int i, float n) { fx->setParameter(fx, i, n); };
     // parameter indices (keep in sync with SKRATCHA.cpp)
     enum { kLevel = 0, kSample, kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kStripRange, kStripDir, kRelease,
-           kSmooth, kCatch, kCurve, kFader, kReverse, kCrackle, kPadBase, kLoop, kScratch, kJog, kAngle };
+           kSmooth, kCatch, kCurve, kFader, kReverse, kCrackle, kPadBase, kLoop, kScratch, kJog, kAngle,
+           kASlot = 33, kFireMode = 93, kHLesson = 80, kHRun = 81, kHDemo = 82, kHBpm = 83 };
     auto logNorm = [](double v, double lo, double hi) { return (float)(std::log(v / lo) / std::log(hi / lo)); };
     setp(kSmooth, logNorm(smoothMs, 0.5, 20.0));
     setp(kLevel, (float)((0.0 + 40.0) / 46.0));
@@ -70,9 +71,13 @@ int main(int argc, char** argv)
     if (scen == "demo") { sampleIndex = 1; seconds = 10.0; }
     if (scen == "tone_extreme") { setp(kStripRange, 1.0f); }
     if (scen == "fast") seconds = 3.0;
-    if (probe) sampleIndex = 7;
-    setp(kSample, (float)(sampleIndex - 1) / 63.0f);
+    if (probe) sampleIndex = 8;   // SKRATCHA_TEST_SLOT8 = the probe record
+    setp(kFireMode, 0.0f);                                   // pads only cue (the scenarios start the motor with pad 9)
+    setp(kASlot, (float)(std::min(sampleIndex, 8) - 1) / 7.0f);
     setp(kLoop, 1.0f);
+    if (scen == "lesson_demo") { setp(kHLesson, 0.0f); setp(kHDemo, 1.0f); seconds = 8.0; }
+    const bool practice = scen.rfind("practice", 0) == 0;   // practice_good | practice_wrong | practice_none
+    if (practice) { setp(kHLesson, scen.find("forward") != std::string::npos ? 2.0f / 5.0f : 0.0f); setp(kHRun, 1.0f); seconds = 3.0 + 12.0 + 0.5; }
     std::this_thread::sleep_for(std::chrono::milliseconds(200));   // let the background thread load the record
 
     const int total = (int)(seconds * sr);
@@ -102,7 +107,7 @@ int main(int argc, char** argv)
     else if (scen == "fast" || scen == "tone_fast" || scen == "tone_extreme") gesture(0.2, 2.7, 6.0, 0.45, -0.6);
     else if (scen == "hold_release")
     {
-        note(0, 36, true); note(100, 36, false);                 // motor on
+        note(0, 44, true); note(100, 44, false);                 // motor on (pad 9)
         pb((int)(1.0 * sr), -0.3);                               // grab and hold still for 0.5 s
         for (double t = 1.0; t < 1.5; t += evStep / sr) pb((int)(t * sr), -0.3);
         // drag back a quarter of the strip, then release: the record is caught by the motor
@@ -114,11 +119,32 @@ int main(int argc, char** argv)
         // break-style routine on the AHH: baby scratches, transformer cuts with pad 37, a chirp, then release on the motor
         gesture(0.2, 2.2, 1.0, 0.3, -0.4);
         gesture(2.4, 4.4, 2.0, 0.3, -0.4);
-        for (int k = 0; k < 16; ++k) { note((int)((4.6 + k * 0.0625) * sr), 37, true); note((int)((4.6 + k * 0.0625 + 0.03) * sr), 37, false); }
+        for (int k = 0; k < 16; ++k) { note((int)((4.6 + k * 0.0625) * sr), 45, true); note((int)((4.6 + k * 0.0625 + 0.03) * sr), 45, false); }
         gesture(4.6, 5.6, 2.0, 0.35, -0.45);
         gesture(5.9, 7.4, 4.0, 0.25, -0.3);
-        note((int)(7.6 * sr), 36, true); note((int)(7.6 * sr) + 200, 36, false);   // motor on
+        note((int)(7.6 * sr), 44, true); note((int)(7.6 * sr) + 200, 44, false);   // motor on
         gesture(8.4, 9.0, 1.5, 0.2, -0.2);
+    }
+    else if (practice)
+    {
+        // follow (or not) the baby-scratch ghost: 80 BPM, 1/8 = 0.375 s, after a one-bar count-in (3 s)
+        const double st = 60.0 / 80.0 / 2.0;
+        for (double t = 3.0; t < 15.0; t += evStep / sr)
+        {
+            const double u = (t - 3.0) / st;
+            const int k = (int)u; const double f = u - k;
+            double a = (k % 2 == 0) ? -0.7 : 0.7, b = -a;
+            if (scen == "practice_wrong") { a = -a; b = -b; }
+            double v = a + (b - a) * (0.5 - 0.5 * std::cos(M_PI * f));
+            if (v == 0.0) v = 1e-4;
+            if (scen != "practice_none") pb((int)(t * sr), v);
+        }
+        if (scen.find("forward") != std::string::npos)
+            for (int k = 0; k < 32; k += 2)   // pad 10 held on the forward strokes (CUT MODE = OPEN from the lesson)
+            {
+                note((int)((3.0 + k * st + 0.01) * sr), 45, true);
+                note((int)((3.0 + (k + 1) * st - (scen == "practice_forward_late" ? -0.2 : 0.01)) * sr), 45, false);
+            }
     }
     else if (scen == "jog")
     {
@@ -197,6 +223,12 @@ int main(int argc, char** argv)
     for (const Ev& e : evs) std::fprintf(c, "%d,%d,%d,%d\n", e.frame, e.b0, e.b1, e.b2);
     std::fclose(c);
 
+    for (int idx : {85, 86, 87, 88, 89, 91})
+    {
+        char txt[256] = {0};
+        fx->dispatcher(fx, effGetParamDisplay, idx, 0, txt, 0);
+        std::printf("param %d: %s\n", idx, txt);
+    }
     int angleReports = 0; for (int i : g_automatedIdx) if (i == kAngle) ++angleReports;
     std::printf("automate=%d (angle %d) updateDisplay=%d\n", g_automate, angleReports, g_update);
     fx->dispatcher(fx, effMainsChanged, 0, 0, nullptr, 0);

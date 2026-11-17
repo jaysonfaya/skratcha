@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Analyse SKRATCHA probe renders: L = 1 kHz tone, R = position ramp (-1..1 over 20 s of the record).
+"""Analyse SKRATCHA probe renders: L = 1 kHz tone, R = position ramp (-1..1 over 15 s of the record).
 
 Reports per file:
   * speed taken from the ramp (file samples per output sample), and how smooth it is
@@ -19,7 +19,7 @@ from scipy.io import wavfile
 from scipy.signal import butter, sosfiltfilt, hilbert, stft
 
 SR = 44100
-N_REC = 20 * SR        # record length in samples
+N_REC = 15 * SR        # record length in samples
 RAMP_PER_SAMPLE = 2.0 / (N_REC - 1)
 
 

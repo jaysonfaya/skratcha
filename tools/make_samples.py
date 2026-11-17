@@ -153,11 +153,38 @@ def bass_drop():
     return norm(x)
 
 
+def fresh():
+    """'fresh': a breathy f, a bright 'reh' vowel and a 'sh' tail (the classic scratch word, own synthesis)"""
+    nf, nv, ns = int(0.09 * SR), int(0.32 * SR), int(0.22 * SR)
+    f_ = lfilter(*butter(2, [2500 / (SR / 2), 9000 / (SR / 2)], btype="band"), rng.standard_normal(nf)) * np.linspace(0.2, 0.6, nf)
+    src = glottal(np.linspace(240, 205, nv), nv) + 0.03 * rng.standard_normal(nv)
+    v = formant_glide(src, [420, 1300, 2500], [560, 1850, 2650], [70, 90, 120], [1.0, 0.7, 0.3]) * env_adsr(nv, 0.015, 0.08, 0.8, 0.08)
+    v = v / (np.max(np.abs(v)) + 1e-9)
+    sh = lfilter(*butter(2, [1800 / (SR / 2), 6500 / (SR / 2)], btype="band"), rng.standard_normal(ns)) * env_adsr(ns, 0.03, 0.05, 0.8, 0.12)
+    sh = sh / (np.max(np.abs(sh)) + 1e-9) * 0.55
+    f_ = f_ / (np.max(np.abs(f_)) + 1e-9) * 0.4
+    return norm(np.concatenate([f_, v, sh]))
+
+
+def horn():
+    n = int(1.1 * SR)
+    t = np.arange(n) / SR
+    x = np.zeros(n)
+    for f in [233.08, 293.66, 349.23, 466.16]:            # Bb major horn stab
+        vib = 1 + 0.006 * np.sin(2 * np.pi * 5.5 * t) * np.clip(t * 3, 0, 1)
+        ph = np.cumsum(f * vib / SR) % 1.0
+        x += 1.0 - 2.0 * ph
+    x = formant(x, [700, 1200, 2600], [200, 260, 400], [1.0, 0.8, 0.3])
+    x = np.tanh(2.0 * x / (np.max(np.abs(x)) + 1e-9))
+    return norm(x * env_adsr(n, 0.03, 0.12, 0.8, 0.35))
+
+
 def main():
     out = os.path.join(sys.argv[1] if len(sys.argv) > 1 else ".", "Samples")
     os.makedirs(out, exist_ok=True)
     for name, fn in [("01 AHH", ahh), ("02 OOH WAH", ooh_wah), ("03 STAB", stab), ("04 TONE 1K", tone),
-                     ("05 BREAK 92", brk), ("06 BASS DROP", bass_drop)]:
+                     ("05 BREAK 92", brk), ("06 BASS DROP", bass_drop),
+                     ("07 FRESH", fresh), ("08 HORN", horn)]:
         x = fn()
         pad = np.zeros(int(0.05 * SR))   # a short lead-in so a scratch starts from silence
         x = np.concatenate([pad, x, pad])
