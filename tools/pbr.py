@@ -14,8 +14,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
-KEY = np.array([-0.42, -0.50, 0.76]); KEY /= np.linalg.norm(KEY)
-STRIP = np.array([0.62, -0.18, 0.76]); STRIP /= np.linalg.norm(STRIP)
+KEY = np.array([-0.72, -0.38, 0.58]); KEY /= np.linalg.norm(KEY)
+STRIP = np.array([0.74, -0.30, 0.60]); STRIP /= np.linalg.norm(STRIP)
 LIGHT_DIR = np.array([-0.55, -0.62, 0.56]); LIGHT_DIR /= np.linalg.norm(LIGHT_DIR)   # sun-like key for shadows
 FILL_DIR = np.array([0.6, -0.2, 0.77]); FILL_DIR /= np.linalg.norm(FILL_DIR)
 
@@ -126,6 +126,9 @@ def env_radiance(R, rough):
     L += 0.05 + 0.42 * up ** 6 + 0.06 * np.clip(-R[..., 0] - R[..., 1], 0, 1)
     L -= 0.04 * np.exp(-((up - 0.55) / 0.12) ** 2)
     L += 0.05 * np.exp(-((up - 0.15) / 0.10) ** 2)
+    # white sweep in front of the deck (product-photo cove): seen by sides and fronts that face the camera
+    down = np.clip(-R[..., 2], 0, 1)
+    L += 0.55 * np.sqrt(down) * np.clip(R[..., 1] + 0.3, 0, 1)
     L = np.clip(L, 0.0, None)
     return L
 
