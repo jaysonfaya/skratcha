@@ -1,0 +1,7 @@
+{
+  "_comment": "Not used: the hand-made skin in skins/ is copied as is. Kept so gen_ui.py has something sensible if skins/ is removed.",
+  "pages": [
+    { "name": "DECK", "controls": ["Smooth", "Strip Range", "Catch", "Level", "Pitch", "Sample", "Start Time", "Brake Time"] },
+    { "name": "SETUP", "controls": ["Pitch Range", "Release", "Strip Dir", "Cut Curve", "Crackle", "Pad Base", "Loop", "Scratch"] }
+  ]
+}

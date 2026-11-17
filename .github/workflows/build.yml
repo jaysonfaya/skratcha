@@ -1,0 +1,52 @@
+name: Build SKRATCHA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Official MPC Plugin SDK (pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: inmusic-software/mpc-plugin-builder-sdk
+          ref: febd2ca5bd9eb16c4a412837196e145566bc981b
+          path: sdk
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build (native test + arm32 Live 1 + arm64 Live III)
+        run: |
+          cp -r plugin sdk/plugins/SKRATCHA
+          python sdk/tools/build.py sdk/plugins/SKRATCHA
+      - name: Host simulator test
+        run: |
+          SO=$(ls sdk/plugins/SKRATCHA/build/native/*.so)
+          sdk/.sdk-tools/host_sim "$SO" test --notes 36 --wav test.wav | tee host_sim.txt
+          grep -q "0 failures" host_sim.txt
+      - name: Package
+        run: |
+          python sdk/tools/package.py sdk/plugins/SKRATCHA --out dist
+          VER=$(python -c "import json;print(json.load(open('plugin/plugin.json'))['version'])")
+          cd sdk/plugins/SKRATCHA/build && zip -qr "../../../../dist/SKRATCHA-$VER-mpc-ordner.zip" "JJ DA PLUG - VST - SKRATCHA" && cd -
+          ls -la dist
+          echo "VER=$VER" >> $GITHUB_ENV
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SKRATCHA-${{ env.VER }}
+          path: dist/*.zip
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${VER}-b${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" dist/*.zip --title "SKRATCHA $VER (build $GITHUB_RUN_NUMBER)" \
+            --notes "Built with the official MPC Plugin SDK. One folder for MPC Live/Live II/One (arm32) and Live III/XL (arm64). Copy 'JJ DA PLUG - VST - SKRATCHA' into 'VST2 Plugins' on a drive. Needs MPC OS 3.10.1 and External Plugin Support."

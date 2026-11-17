@@ -1,0 +1,17 @@
+{
+  "name": "SKRATCHA",
+  "manufacturer": "JJ DA PLUG",
+  "version": "1.0.0",
+  "format": "vst2",
+  "kind": "instrument",
+  "uid": "JJsK",
+  "numInputs": 0,
+  "numOutputs": 2,
+  "category": "Sampler",
+  "file32": "VST/skratcha-arm32.so",
+  "file64": "VST/skratcha-arm64.so",
+  "description": "SKRATCHA: a scratch turntable for the MPC. Scratch the record with the touch strip (pitch bend), the on-screen platter or a Q-Link; pads for start/stop, cut fader and hot cues. By JJ DA PLUG.",
+  "author": "JJ DA PLUG",
+  "url": "",
+  "license": "MIT"
+}
