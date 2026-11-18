@@ -110,7 +110,7 @@ def finish(y):
 def main():
     out_dir = sys.argv[1]
     local = sys.argv[sys.argv.index("--local") + 1] if "--local" in sys.argv else None
-    tmp = local or os.path.join(os.path.dirname(os.path.abspath(out_dir)), "_speech_src")
+    tmp = local or __import__("tempfile").mkdtemp(prefix="skr_speech_")   # never inside Content (would be packaged)
     os.makedirs(tmp, exist_ok=True)
     os.makedirs(out_dir, exist_ok=True)
     k = 1
