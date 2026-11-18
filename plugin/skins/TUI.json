@@ -10836,7 +10836,7 @@
          "type": "Button",
          "data": {
           "version": 2,
-          "onImage": "sk_go_open_on.png",
+          "onImage": "sk_go_open_off.png",
           "offImage": "sk_go_open_off.png",
           "buttonId": 1,
           "numButtonsInGroup": 1,
@@ -11571,7 +11571,7 @@
          "type": "Button",
          "data": {
           "version": 2,
-          "onImage": "sk_go_load_on.png",
+          "onImage": "sk_go_load_off.png",
           "offImage": "sk_go_load_off.png",
           "buttonId": 1,
           "numButtonsInGroup": 1,
@@ -12755,7 +12755,7 @@
      }
     },
     {
-     "key": "skTg_rescan_316x40",
+     "key": "skTg_rescan_154x40",
      "value": {
       "version": 4,
       "actions": [
@@ -12824,7 +12824,7 @@
          "showWhenDataModelInvalid": "Show",
          "whenVisible": "WhenFocussed",
          "boundsType": "Absolute",
-         "bounds": "0 0 316 40",
+         "bounds": "0 0 154 40",
          "additionalInvalidatingHandles": []
         }
        },
@@ -12836,8 +12836,8 @@
          "type": "Button",
          "data": {
           "version": 2,
-          "onImage": "sk_key_rescan_316x40_on.png",
-          "offImage": "sk_key_rescan_316x40_off.png",
+          "onImage": "sk_key_rescan_154x40_on.png",
+          "offImage": "sk_key_rescan_154x40_off.png",
           "buttonId": 1,
           "numButtonsInGroup": 1,
           "handleName": "Data",
@@ -12854,7 +12854,114 @@
          "showWhenDataModelInvalid": "Show",
          "whenVisible": "Always",
          "boundsType": "Absolute",
-         "bounds": "0 0 316 40",
+         "bounds": "0 0 154 40",
+         "additionalInvalidatingHandles": []
+        }
+       }
+      ]
+     }
+    },
+    {
+     "key": "skTg_subdirs_154x40",
+     "value": {
+      "version": 4,
+      "actions": [
+       {
+        "version": 2,
+        "onAction": "Mouse Down",
+        "handler": "Toggle Switch",
+        "handleName": "Data",
+        "additionalData": "",
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        }
+       },
+       {
+        "version": 2,
+        "onAction": "Enter Pressed",
+        "handler": "Toggle Switch",
+        "handleName": "Data",
+        "additionalData": "",
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        }
+       }
+      ],
+      "backgroundData": {
+       "version": 1,
+       "focussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       },
+       "unfocussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       }
+      },
+      "ignoreMousePresses": false,
+      "disableCoarseDataWheel": false,
+      "repeats": 1,
+      "hideQLinkBounds": true,
+      "componentsData": [
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Focus",
+         "type": "Focus",
+         "data": {
+          "version": 1,
+          "backgroundColour": "00000000",
+          "outlineColour": "00000000",
+          "backgroundInset": 2.0,
+          "outlineThickness": 0.0
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 2,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "WhenFocussed",
+         "boundsType": "Absolute",
+         "bounds": "0 0 154 40",
+         "additionalInvalidatingHandles": []
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Button",
+         "type": "Button",
+         "data": {
+          "version": 2,
+          "onImage": "sk_key_subdirs_154x40_on.png",
+          "offImage": "sk_key_subdirs_154x40_off.png",
+          "buttonId": 1,
+          "numButtonsInGroup": 1,
+          "handleName": "Data",
+          "gestureBehaviour": "Instant"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 2,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "0 0 154 40",
          "additionalInvalidatingHandles": []
         }
        }
@@ -27540,7 +27647,7 @@
         "componentData": {
          "version": 1,
          "name": "rescan",
-         "type": "skTg_rescan_316x40",
+         "type": "skTg_rescan_154x40",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -27561,7 +27668,37 @@
          "showWhenDataModelInvalid": "Show",
          "whenVisible": "Always",
          "boundsType": "Absolute",
-         "bounds": "932 230 316 40",
+         "bounds": "932 230 154 40",
+         "additionalInvalidatingHandles": []
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "subdirs",
+         "type": "skTg_subdirs_154x40",
+         "data": {
+          "version": 1,
+          "handleName": "Data"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": [
+          {
+           "key": "Data",
+           "value": "Parameter 225"
+          }
+         ]
+        },
+        "bounds": {
+         "version": 2,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "1094 230 154 40",
          "additionalInvalidatingHandles": []
         }
        },

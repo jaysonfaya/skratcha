@@ -155,6 +155,8 @@ public:
         kSwipeSpeed, kShownC, kShownA, kShownB, kDipC, kDipA, kDipB,
         kLabC, kLabA = kLabC + 10, kLabB = kLabA + 10,
         kFeedSrc = kLabB + 10, kRecTap, kGrabTap, kLiveOn, kLiveSnap, kRecLed, kLiveLed, kFeedInfo, kRecInfo, kFeedMeter,
+        // ---- 2.4.1 ----
+        kSubFolders,
         kNumParams
     };
 
@@ -167,7 +169,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2400;
+        i.version = 2410;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -348,6 +350,7 @@ public:
         text("feedinfo", "Feed Info");
         text("recinfo", "Rec Info");
         addParam(fixed(floatParam("feedmeter", "Feed Meter", 0.0f, 1.0f, 0.0f, "", 2)));
+        addParam(boolParam("subdirs", "Sub Folders", true));    // browser: also every sound in the folders below
         if (numParams() != kNumParams) mpc::log("SKRATCHA: parameter count mismatch %d %d", numParams(), (int)kNumParams);
 
         deckP_[0] = {kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kFader, kReverse, kLoop, kAngle, kCutLed, kStrobe, kASlot, kAStyle, kAVol, kAName, kANames};
@@ -628,8 +631,8 @@ public:
         {
             const int i = fileTop_.load() + index - kFRows;
             out = "";
-            if (i >= 0 && i < (int)files_.size()) out = (i == getInt(kBrFile) - 1 ? "> " : "") + displayName(files_[(size_t)i], 27);
-            else if (i == 0 && files_.empty() && !listing_.load()) out = "(KEINE WAVS HIER)";
+            if (i >= 0 && i < (int)files_.size()) out = (i == getInt(kBrFile) - 1 ? "> " : "") + displayName(fileOf(files_[(size_t)i]), 27);
+            else if (i == 0 && files_.empty() && !listing_.load()) out = "(KEINE SOUNDS HIER)";
             return true;
         }
         if (index == kBrPath)
@@ -679,14 +682,14 @@ public:
         if (index == kBrFile || (index >= kBrRows && index < kBrRows + 5))
         {
             const int sel = getInt(kBrFile) - 1 + (index == kBrFile ? 0 : index - kBrRows - 2);
-            out = (sel >= 0 && sel < (int)files_.size()) ? displayName(files_[(size_t)sel], 29) : std::string("");
+            out = (sel >= 0 && sel < (int)files_.size()) ? displayName(fileOf(files_[(size_t)sel]), 29) : std::string("");
             return true;
         }
         if (index == kBrInfo)
         {
-            const int nf = (int)dirs_.size(), files = (int)files_.size();
-            out = "DATEI " + std::to_string(std::min(getInt(kBrFile), files)) + "/" + std::to_string(files) +
-                  "  ORDNER " + std::to_string(std::min(getInt(kBrFolder), nf)) + "/" + std::to_string(nf);
+            const int files = (int)files_.size();
+            out = (filesSearching_ ? std::string("SUCHE ... ") : std::string("SOUND ")) + std::to_string(std::min(getInt(kBrFile), files)) + "/" + std::to_string(files);
+            if (filesDeep_ && !filesSearching_) out += " (MIT UNTERORDNERN)";
             return true;
         }
         if (index == kHMsg) { out = kMsgText[mpc::clamp(liveMsg_.load(), 0, kNumMsgs - 1)]; return true; }
@@ -1836,48 +1839,78 @@ private:
             dirs_ = std::move(list);
             numFolders_.store((int)dirs_.size());
         }
+        dirsVersion_.fetch_add(1);
         listing_.store(false);
         bumpBrowser(); bump(kBrPath);
         filesReq_.store(true);
     }
 
+    // the sounds of the chosen folder; with "Sub Folders" also every sound below it (depth 8, 4000 files),
+    // shown while the search runs and stopped as soon as another folder is chosen
     void listFiles()
     {
         std::string path;
+        bool deep;
         { std::lock_guard<std::mutex> lk(textMutex_); path = filesWant_; }
-        std::vector<std::string> wavs;
-        listWavs(path, wavs);
+        deep = getBool(kSubFolders);
+        filesDeep_ = deep;
         std::vector<std::string> names;
-        for (const std::string& w : wavs) { names.push_back(fileOf(w)); if ((int)names.size() >= kMaxEntries) break; }
+        auto publish = [&](bool searching)
         {
-            std::lock_guard<std::mutex> lk(textMutex_);
-            files_ = std::move(names);
-            filesDir_ = path;
-            numFiles_.store((int)files_.size());
+            {
+                std::lock_guard<std::mutex> lk(textMutex_);
+                files_ = names;
+                filesDir_ = path;
+                numFiles_.store((int)files_.size());
+                filesSearching_ = searching;
+            }
+            filesVersion_.fetch_add(1);
+            for (int r = 0; r < 7; ++r) bump(kFRows + r);
+            bump(kBrInfo);
+        };
+        if (path.empty()) { publish(false); return; }
+        std::vector<std::string> here;
+        listWavs(path, here);
+        for (const std::string& w : here) { names.push_back(fileOf(w)); if ((int)names.size() >= kMaxEntries) break; }
+        if (!deep || path == "/") { publish(false); return; }
+        publish(true);
+        // breadth first, so the nearest folders come first
+        std::vector<std::pair<std::string, int>> queue;   // relative path, depth
+        for (const std::string& d : subDirs(path)) queue.push_back({d, 1});
+        auto lastPub = std::chrono::steady_clock::now();
+        size_t shown = names.size();
+        for (size_t qi = 0; qi < queue.size() && (int)names.size() < kMaxEntries; ++qi)
+        {
+            if (filesReq_.load() || listReq_.load() || stopThread_.load()) return;   // the user chose something else
+            const std::string rel = queue[qi].first;
+            const int depth = queue[qi].second;
+            std::vector<std::string> found;
+            listWavs(path + "/" + rel, found);
+            for (const std::string& w : found) { names.push_back(rel + "/" + fileOf(w)); if ((int)names.size() >= kMaxEntries) break; }
+            if (depth < 8 && queue.size() < 20000)
+                for (const std::string& d : subDirs(path + "/" + rel)) queue.push_back({rel + "/" + d, depth + 1});
+            const auto now = std::chrono::steady_clock::now();
+            if (names.size() != shown && now - lastPub > std::chrono::milliseconds(250)) { shown = names.size(); publish(true); lastPub = now; }
         }
-        filesVersion_.fetch_add(1);
-        for (int r = 0; r < 7; ++r) bump(kFRows + r);
-        bump(kBrInfo);
+        publish(false);
     }
 
     void bumpBrowser()
     {
         for (int r = 0; r < 7; ++r) { bump(kDRows + r); bump(kFRows + r); }
-        for (int r = 0; r < 5; ++r) bump(kBrRows + r);
         bump(kBrInfo); bump(kBrFolderName); bump(kBrPath);
     }
 
     static void lowPriority()
     {
 #if defined(__linux__)
-        setpriority(PRIO_PROCESS, (id_t)syscall(SYS_gettid), 12);   // loading and scanning never compete with audio
+        setpriority(PRIO_PROCESS, (id_t)syscall(SYS_gettid), 4);    // a little below the UI; audio runs real-time anyway
 #endif
     }
 
     // ---- thread 1: the drive scanner (slow, low priority) ----
     void scanLoop()
     {
-        lowPriority();
         listCurrent();
         while (!stopThread_.load())
         {
@@ -2190,6 +2223,7 @@ private:
         for (int r = 0; r < 7; ++r) { lastDTap[r] = getNormalised(kDTap + r); lastFTap[r] = getNormalised(kFTap + r); }
         float lastDScroll = getNormalised(kFolderScroll), lastFScroll = getNormalised(kFileScroll), accD = 0.0f, accF = 0.0f;
         int idleD = 0, idleF = 0;
+        int lastDirsVer = -1, lastSub = -1;
         float lastRecTap = getNormalised(kRecTap);
         int lastGrabSeen = 0, lastLiveLed = -1, lastRecLed = -1, lastMeter = -1, feedStale = 0;
         int dip[3] = {0, 0, 0}, shown[3] = {-1, -1, -1}, lastLab[3][kNumStyles], dipPhase[3] = {0, 0, 0};
@@ -2296,20 +2330,23 @@ private:
             int folder = getInt(kBrFolder);
             if (folder != lastFolder)
             {
-                if (lastFolder >= 0) { set(kBrFile, 1.0f); notify(kBrFile); fileTop_.store(0); }
+                const bool sameEntry = lastFolder == folder;
+                if (lastFolder >= 0 && !sameEntry) { set(kBrFile, 1.0f); notify(kBrFile); fileTop_.store(0); }
                 lastFolder = folder; lastFile = -1;
                 keepVisible(folder - 1, nF, folderTop_);
                 {
                     std::lock_guard<std::mutex> lk(textMutex_);
                     const int f = folder - 1;
-                    filesWant_ = (f >= 0 && f < (int)dirs_.size()) ? dirs_[(size_t)f].path : std::string();
+                    const std::string want = (f >= 0 && f < (int)dirs_.size()) ? dirs_[(size_t)f].path : std::string();
+                    if (want != filesWant_ || getBool(kSubFolders) != filesDeep_) { filesWant_ = want; filesReq_.store(true); }
                 }
-                filesReq_.store(true);
                 if (nF > 1) { lastDPos = 1.0f - (float)(folder - 1) / (float)(nF - 1); setNormalised(kFolderPos, lastDPos); notify(kFolderPos); }
                 for (int r = 0; r < 7; ++r) bump(kDRows + r);
                 bump(kBrFolderName); bump(kBrInfo);
             }
             if (nF != lastNF) { lastNF = nF; lastFolder = -1; }
+            const int dv = dirsVersion_.load(), sub = getBool(kSubFolders) ? 1 : 0;
+            if (dv != lastDirsVer || sub != lastSub) { lastDirsVer = dv; lastSub = sub; lastFolder = -1; }
             const int nFiles = numFiles_.load();
             if (filesVersion_.load() != lastFilesVer) { lastFilesVer = filesVersion_.load(); lastFile = -1; }
             if (fp > 0)
@@ -2336,7 +2373,6 @@ private:
                 keepVisible(lastFile - 1, nFiles, fileTop_);
                 if (nFiles > 1) { lastFPos = 1.0f - (float)(lastFile - 1) / (float)(nFiles - 1); setNormalised(kFilePos, lastFPos); notify(kFilePos); }
                 for (int r = 0; r < 7; ++r) bump(kFRows + r);
-                for (int r = 0; r < 5; ++r) bump(kBrRows + r);
                 bump(kBrInfo);
             }
             // double tap on a file / LADEN: into the current slot of the active deck, onto the platter
@@ -2555,6 +2591,9 @@ private:
     std::vector<DirEntry> dirs_;
     std::vector<std::string> files_, rootPaths_;
     std::string cwd_, filesDir_, filesWant_;
+    std::atomic<int> dirsVersion_{0};
+    std::atomic<bool> filesDeep_{true};
+    bool filesSearching_ = false;
     std::atomic<bool> listing_{false}, listReq_{false}, filesReq_{false};
     std::atomic<int> numFiles_{0}, filesVersion_{0};
     std::atomic<int> loadRequest_{0};

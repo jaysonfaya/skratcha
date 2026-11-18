@@ -7,6 +7,7 @@
 
 #include "mpc_plugin.h"
 #include "dsp/wav.h"
+#include "skr_audio_impl.h"
 
 #include <algorithm>
 #include <cctype>
@@ -64,6 +65,7 @@ struct HalfbandFir
 inline void buildMips(Record& r)
 {
     static const HalfbandFir fir;
+    constexpr int N = HalfbandFir::N, H = (N - 1) / 2;
     for (int k = 1; k < kMipLevels; ++k)
     {
         const size_t srcLen = r.len[k - 1];
@@ -74,16 +76,28 @@ inline void buildMips(Record& r)
             const std::vector<float>& s = r.lv[k - 1][c];
             std::vector<float>& d = r.lv[k][c];
             d.assign(dstLen, 0.0f);
+            const float* sp = s.data();
             for (size_t j = 0; j < dstLen; ++j)
             {
                 const long centre = (long)(2 * j);
-                double acc = 0.0;
-                for (int t = 0; t < HalfbandFir::N; ++t)
+                float acc;
+                if (centre >= H && centre + H < (long)srcLen)
                 {
-                    const long idx = centre + t - (HalfbandFir::N - 1) / 2;
-                    if (idx >= 0 && idx < (long)srcLen) acc += fir.h[t] * s[(size_t)idx];
+                    // symmetric taps: fold the two halves, half the multiplies
+                    const float* p = sp + centre;
+                    acc = fir.h[H] * p[0];
+                    for (int t = 1; t <= H; ++t) acc += fir.h[H + t] * (p[t] + p[-t]);
                 }
-                d[j] = std::fabs(acc) < 1e-20 ? 0.0f : (float)acc;
+                else
+                {
+                    acc = 0.0f;
+                    for (int t = 0; t < N; ++t)
+                    {
+                        const long idx = centre + t - H;
+                        if (idx >= 0 && idx < (long)srcLen) acc += fir.h[t] * sp[idx];
+                    }
+                }
+                d[j] = std::fabs(acc) < 1e-20f ? 0.0f : acc;
             }
         }
     }
@@ -110,22 +124,20 @@ inline std::string displayName(const std::string& file, size_t maxLen = 22)
 // Loads a WAV (mono or stereo, any sample rate the SDK reader takes), cuts it to maxSeconds and builds the mips.
 inline Record* loadRecord(const std::string& path, double maxSeconds = kMaxSeconds)
 {
-    ::dsp::WavData w;
-    if (!::dsp::loadWav(path, w) || w.numFrames() < 16 || w.numChannels() < 1) return nullptr;
+    AudioData a;
+    if (!decodeAudio(path, maxSeconds, a) || a.l.size() < 16) return nullptr;
     Record* r = new Record();
     r->path = path;
     r->name = displayName(fileOf(path));
-    r->sampleRate = w.sampleRate > 1000.0 ? w.sampleRate : 44100.0;
-    r->channels = w.numChannels() >= 2 ? 2 : 1;
-    size_t n = w.numFrames();
-    const size_t maxN = (size_t)(maxSeconds * r->sampleRate);
-    if (n > maxN) n = maxN;
+    r->sampleRate = a.sampleRate;
+    r->channels = a.r.empty() ? 1 : 2;
+    const size_t n = a.l.size();
     r->length = n;
     r->len[0] = n;
+    r->lv[0][0] = std::move(a.l);
+    if (r->channels > 1) r->lv[0][1] = std::move(a.r);
     for (int c = 0; c < r->channels; ++c)
     {
-        r->lv[0][c].assign(w.channels[(size_t)c].begin(), w.channels[(size_t)c].begin() + (long)n);
-        for (float& v : r->lv[0][c]) v = std::isfinite(v) ? v : 0.0f;
         // 2 ms fade-in / fade-out so a one-shot never clicks at its ends when it is scratched past them
         const size_t f = std::min(n / 4, (size_t)(0.002 * r->sampleRate));
         for (size_t i = 0; i < f; ++i) { const float g = (float)i / (float)f; r->lv[0][c][i] *= g; r->lv[0][c][n - 1 - i] *= g; }
@@ -135,6 +147,11 @@ inline Record* loadRecord(const std::string& path, double maxSeconds = kMaxSecon
 }
 
 inline bool hasWavExt(const std::string& f)
+{
+    return isAudioName(f);
+}
+
+inline bool hasWavExtOld(const std::string& f)
 {
     if (f.size() < 5 || f[0] == '.') return false;
     std::string e = f.substr(f.size() - 4);

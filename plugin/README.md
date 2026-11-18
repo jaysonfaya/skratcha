@@ -1,4 +1,4 @@
-# SKRATCHA 2.4 – zwei Scratch-Plattenspieler für die MPC
+# SKRATCHA 2.4.1 – zwei Scratch-Plattenspieler für die MPC
 
 Von **JJ DA PLUG**. Instrument-Plugin für die MPC Live III / XL (arm64) und die MPC Live / Live II / One (arm32), gebaut mit dem offiziellen MPC Plugin SDK.
 
@@ -93,6 +93,8 @@ Rechts liegen die Schalter per Touch: Slip, Hamster, Strip Invert, Pad 1 = C#1, 
 - **Ordner öffnen:** Auf den Pfeil **▶** am Ende der Zeile tippen oder doppelt auf den Namen tippen. **[..] ZURÜCK** oder ZURÜCK geht eine Ebene hoch. Rechts stehen die WAVs des geöffneten Ordners.
 - **Sample laden:** Auf das **+** am Ende der Zeile tippen oder doppelt auf den Namen tippen. Das Sample liegt dann im aktuellen Slot (Pad) des aktiven Decks.
 - **In einen bestimmten Slot:** Sample wählen, dann auf einen der 8 Slots rechts tippen.
+- **Alle Sounds:** Seit 2.4.1 zeigt die Liste WAV, AIFF, MP3 und FLAC. Bei MP3 und FLAC wird nur der Anfang geladen, höchstens 15 s.
+- **UNTERORDNER** (Standard an): Rechts stehen alle Sounds des geöffneten Ordners **und aller Ordner darunter** (bis 8 Ebenen, höchstens 4000 Sounds). Unten steht „SUCHE ...“, solange noch gesucht wird. Die Liste füllt sich dabei laufend. Öffnest du einen anderen Ordner, bricht die Suche sofort ab.
 
 ## LIVE – aufnehmen und live scratchen (neu in 2.4)
 Dafür gibt es das zweite Plugin **SKRATCHA FEED**. Es kommt als Insert auf die Spur, die du scratchen willst: einen Drum-Track, einen Sample-Track, den Master oder eine Audio-Spur mit dem Eingang.
@@ -174,6 +176,7 @@ Ob die MPC diese Bilder auch bei externen VST-Plugins anzeigt, ist noch nicht be
 
 ## Lizenzen
 - Code: MIT.
+- Decoder: dr_wav, dr_mp3, dr_flac von David Reid (`src/third_party/`, Public Domain / MIT No Attribution).
 - Samples: Reden FDR 1941 (Public Domain Mark 1.0) und Armstrong 1969 (NASA, gemeinfrei), von Wikimedia Commons. Die übrigen Sounds sind selbst synthetisiert.
 - Grafiken: eigene Renderings mit dem JF-Logo des Erstellers.
 - Schriften in den Bildern: Rajdhani und Titillium Web (SIL OFL).

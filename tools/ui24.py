@@ -761,7 +761,7 @@ def main():
             brow.place(swipe_row("skSwipe%d" % li, sw, 60, row_strip[li], 2), P["Folder Scroll" if li == 0 else "File Scroll"], x0, y, sw, 60,
                        extra_map=[{"key": "Tap", "value": "Parameter %d" % tap_p}], name="sw%d%d" % (li, r))
             # the arrow at the end of the row: one tap = open the folder / load the file
-            brow.place(def_toggle("skRowGo%d" % li, go_on[li], go_off[li], 60, 56), tap_p, x0 + w_ - 62, y + 2, 60, 56, name="go%d%d" % (li, r))
+            brow.place(def_toggle("skRowGo%d" % li, go_off[li], go_off[li], 60, 56), tap_p, x0 + w_ - 62, y + 2, 60, 56, name="go%d%d" % (li, r))
             bpv.alpha_composite(go_img[li], (x0 + w_ - 62, y + 2))
         # scroll bar: slide to move through the list
         sb_s, sb_f = scrollbar_strip(48, 456)
@@ -787,7 +787,8 @@ def main():
     brow.place(def_toggle("skTg_load", off, off, 316, 44), P["File Load"], 932, 62, 316, 44, name="load"); bpv.alpha_composite(off_i, (932, 62))
     toggle(brow, bpv, "Preview", "preview", "VORHOEREN", 932, 172, 154, 48)
     toggle(brow, bpv, "Auto Preview", "autoprev", "AUTO-HOEREN", 1094, 172, 154, 48, on_prev=True)
-    toggle(brow, bpv, "Rescan", "rescan", "NEU LESEN", 932, 230, 316, 40)
+    toggle(brow, bpv, "Rescan", "rescan", "NEU LESEN", 932, 230, 154, 40)
+    toggle(brow, bpv, "Sub Folders", "subdirs", "UNTERORDNER", 1094, 230, 154, 40, on_prev=True)
     for s in range(8):
         c, r = s % 4, (0 if s >= 4 else 1)
         x, y = 928 + c * 82, 314 + r * 84
