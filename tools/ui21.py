@@ -283,7 +283,7 @@ def main():
     knobN = def_knob_named("skKnobN72", knob_fn, 64, 72)
     led_s, led_frames = M.draw_led_strip(170, 28, 33)
     led_fn = save(led_s, "sk_stripled_f33.png")
-    clear_btn = define("skHidden", [act("Mouse Down", "Toggle Switch")],
+    clear_btn = define("skHidden", [],
                        [comp("Button", "Button", {"version": 2, "onImage": CLEAR, "offImage": CLEAR, "buttonId": 1, "numButtonsInGroup": 1,
                                                   "handleName": "Data", "gestureBehaviour": "Instant"}, bounds(0, 0, 72, 72))])
 

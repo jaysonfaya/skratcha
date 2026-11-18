@@ -173,7 +173,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2500;
+        i.version = 2510;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;

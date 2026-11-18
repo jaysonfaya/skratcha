@@ -1,4 +1,4 @@
-# SKRATCHA 2.5.0 – zwei Scratch-Plattenspieler für die MPC
+# SKRATCHA 2.5.1 – zwei Scratch-Plattenspieler für die MPC
 
 Von **JJ DA PLUG**. Instrument-Plugin für die MPC Live III / XL (arm64) und die MPC Live / Live II / One (arm32), gebaut mit dem offiziellen MPC Plugin SDK.
 

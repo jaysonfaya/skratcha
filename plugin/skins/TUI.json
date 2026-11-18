@@ -1002,19 +1002,7 @@
      "key": "skHidden_72x72",
      "value": {
       "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
+      "actions": [],
       "backgroundData": {
        "version": 1,
        "focussed": {
@@ -1071,17 +1059,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -1432,17 +1409,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -1933,17 +1899,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -2040,17 +1995,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -2145,17 +2089,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -2310,17 +2243,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -2473,17 +2395,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -2634,17 +2545,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -3717,17 +3617,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -3944,17 +3833,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -4049,17 +3927,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -4158,17 +4025,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -4263,17 +4119,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -4372,17 +4217,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -4477,17 +4311,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -5435,19 +5258,7 @@
      "key": "skHidden_48x48",
      "value": {
       "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
+      "actions": [],
       "backgroundData": {
        "version": 1,
        "focussed": {
@@ -5504,17 +5315,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -6259,17 +6059,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -6434,17 +6223,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -6595,17 +6373,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -7040,17 +6807,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -7215,17 +6971,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -7320,17 +7065,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -7765,17 +7499,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -8008,17 +7731,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -8115,17 +7827,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -8220,17 +7921,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -8385,17 +8075,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -8548,17 +8227,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -8709,17 +8377,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -9818,17 +9475,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -10059,17 +9705,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -10416,17 +10051,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -10759,17 +10383,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -11494,17 +11107,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -12333,17 +11935,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -12438,17 +12029,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -12547,17 +12127,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -12652,17 +12221,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -12761,17 +12319,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -12866,17 +12413,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -13647,17 +13183,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -14204,17 +13729,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -15089,17 +14603,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -15196,17 +14699,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -15301,17 +14793,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -15600,17 +15081,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -17609,17 +17079,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -17716,17 +17175,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -17821,17 +17269,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -18222,17 +17659,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -18327,17 +17753,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -18436,17 +17851,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -18541,17 +17945,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -18650,17 +18043,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -18755,17 +18137,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",
@@ -18864,17 +18235,6 @@
       "actions": [
        {
         "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
-       {
-        "version": 2,
         "onAction": "Enter Pressed",
         "handler": "Toggle Switch",
         "handleName": "Data",
@@ -18969,17 +18329,6 @@
      "value": {
       "version": 4,
       "actions": [
-       {
-        "version": 2,
-        "onAction": "Mouse Down",
-        "handler": "Toggle Switch",
-        "handleName": "Data",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       },
        {
         "version": 2,
         "onAction": "Enter Pressed",

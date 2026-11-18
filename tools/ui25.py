@@ -339,7 +339,7 @@ def main():
     led_fn = save(led_s, "sk_stripled_f33.png")
 
     def hidden(w, h):
-        return define("skHidden_%dx%d" % (w, h), [act("Mouse Down", "Toggle Switch")],
+        return define("skHidden_%dx%d" % (w, h), [],
                       [comp("Button", "Button", {"version": 2, "onImage": CLEAR, "offImage": CLEAR, "buttonId": 1, "numButtonsInGroup": 1,
                                                  "handleName": "Data", "gestureBehaviour": "Instant"}, bounds(0, 0, w, h))])
 

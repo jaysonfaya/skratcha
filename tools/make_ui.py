@@ -597,7 +597,7 @@ def draw_info_bg():
     img.alpha_composite(lg, (int(640 * S - lg.width / 2 - 6 * S), int(300 * S - lg.height / 2)))
     text(d, (640 * S, 492 * S), "SKRATCHA", font(F_BOLD, 40 * S), (240, 240, 242), "mm", spacing=4 * S)
     text(d, (640 * S, 528 * S), "CREATOR: JJ DA PLUG", font(F_SEMI, 20 * S), GOLD, "mm", spacing=2 * S)
-    text(d, (640 * S, 556 * S), "VERSION 2.0.0  ·  MPC PLUGIN SDK", font(F_MED, 15 * S), (140, 142, 146), "mm", spacing=S)
+    text(d, (640 * S, 556 * S), "VERSION 1.0.0  ·  MPC PLUGIN SDK", font(F_MED, 15 * S), (140, 142, 146), "mm", spacing=S)
     steps = ["1  Touch strip: set it to PITCH BEND", "2  Touch the strip = hand on the record", "3  Move = scratch, lift = motor takes over",
              "4  Pad 1 START/STOP, pad 2 CUT", "5  Pad 9–16 hot cues"]
     for i, s in enumerate(steps):
@@ -680,7 +680,7 @@ def def_slider(key, fn, frames, w, h, drag, value_box=None, val_colour="ffffb52e
 
 
 def def_toggle(key, on_fn, off_fn, w, h):
-    acts = [act("Mouse Down", "Toggle Switch"), act("Enter Pressed", "Toggle Switch")]
+    acts = [act("Enter Pressed", "Toggle Switch")]   # the Button itself flips on a tap; a Mouse Down action as well would flip it back
     comps = [focus_comp(w, h), comp("Button", "Button", {"version": 2, "onImage": on_fn, "offImage": off_fn, "buttonId": 1,
                                                        "numButtonsInGroup": 1, "handleName": "Data", "gestureBehaviour": "Instant"}, bounds(0, 0, w, h))]
     return define(key, acts, comps)
@@ -1248,7 +1248,7 @@ def draw_info_bg():
     img.alpha_composite(lab, ((cx - lab_r) * S, (cy - lab_r) * S))
     d = ImageDraw.Draw(img)
     text(d, (640 * S, 576 * S), "SKRATCHA  ·  CREATOR: JJ DA PLUG", font(F_BOLD, 24 * S), (240, 240, 242), "mm", spacing=3 * S)
-    text(d, (640 * S, 606 * S), "VERSION 2.0.0  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), (140, 142, 146), "mm", spacing=S)
+    text(d, (640 * S, 606 * S), "VERSION 1.0.0  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), (140, 142, 146), "mm", spacing=S)
     steps = ["1  Touch strip: set it to PITCH BEND", "2  Touch the strip = hand on the record", "3  Move = scratch, lift = motor takes over",
              "4  Pad 1 START/STOP, pad 2 CUT", "5  Pad 9–16 hot cues"]
     for i, s in enumerate(steps):
@@ -1845,7 +1845,7 @@ def draw_info_bg():
     _put(A, Hm, Rm, Mm, foil, PB.srgb_to_lin([1.0, 0.80, 0.42]), None, 0.18, 1.0)
     Hm[:] = Hm + PB.blur(foil, 0.8 * S) * 0.9 * S
     items = [(640 * S, 576 * S, "SKRATCHA  ·  CREATOR: JJ DA PLUG", font(F_BOLD, 24 * S), "mm", 3 * S),
-             (640 * S, 606 * S, "VERSION 2.0.0  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), "mm", S)]
+             (640 * S, 606 * S, "VERSION 1.0.0  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), "mm", S)]
     for i, s in enumerate(["1  Touch strip: set it to PITCH BEND", "2  Touch the strip = hand on the record", "3  Move = scratch, lift = motor takes over",
                            "4  Pad 1 START/STOP, pad 2 CUT", "5  Pad 9–16 hot cues"]):
         items.append((34 * S, (60 + i * 30) * S, s, font(F_MED, 17 * S), "la", 0))
