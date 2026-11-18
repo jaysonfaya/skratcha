@@ -849,7 +849,7 @@ def main():
         f13 = font(F_SEMI, 13 * S)
         return [(40 * S, 40 * S, "TEST-ASSISTENT  (DENON SC6000M ODER ANDERER MIDI-CONTROLLER)", f13, "la", S),
                 (680 * S, 40 * S, "MIDI-MONITOR  (WAS GERADE ANKOMMT)", f13, "la", S),
-                (680 * S, 428 * S, "ECHTER TELLER STEUERT DAS DECK  (BEI SC6000M IMMER AN)", f13, "la", S),
+                (680 * S, 428 * S, "TELLER: HAND = SCRATCHEN, PLUGIN-MOTOR SPIELT  /  MOTOR = TELLER IST DIE PLATTE", f13, "la", S),
                 (40 * S, 604 * S, "PROTOKOLL: PLUGIN-ORDNER / SKRATCHA MIDI LOG", font(F_MED, 11 * S), "la", 0)]
     sc_bg = V.flat_bg([((14, 14, 626, 614), ""), ((640, 14, 1266, 412), ""), ((640, 418, 1266, 614), "")],
                       [(30, 60, 610, 250), (660, 60, 1246, 360)], sc_items)
@@ -867,8 +867,9 @@ def main():
     for i in range(8):
         sct.place(def_text("skScLine", 570, 34, 17, "ffe8e9ec"), P["Midi Line %d" % (i + 1)], 672, 66 + i * 36, 570, 34, name="ml%d" % i)
     sct.place(def_text("skScStat", 570, 34, 16, "ffffb52e"), P["Midi Stats"], 672, 368, 570, 34, name="stat")
-    toggle(sct, scpv, "Platter Follow", "platfollow", "TELLER FOLGT", 660, 446, 280, 76, "silver")
-    segments(sct, scpv, "Platter RPM", ["33 1/3", "45"], 956, 446, 140, 76, gap=8)
+    toggle(sct, scpv, "Platter Follow", "platfollow", "TELLER FOLGT", 660, 446, 184, 76, "silver")
+    segments(sct, scpv, "Platter Mode", ["HAND", "MOTOR"], 856, 446, 110, 76, gap=6)
+    segments(sct, scpv, "Platter RPM", ["33 1/3", "45"], 1086, 446, 78, 76, gap=4)
     sct.place(def_text("skScPInfo", 586, 34, 17, "ffffb52e"), P["Platter Info"], 660, 532, 586, 34, name="pinfo")
     sct.place(def_text("skScPSpeed", 586, 34, 17, "ffd8dade"), P["Platter Speed"], 660, 568, 586, 34, name="pspeed")
     sd = ImageDraw.Draw(scpv)

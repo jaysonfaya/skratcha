@@ -163,6 +163,8 @@ public:
         kPlatFollow, kPlatInfo, kPlatRpm, kPlatSpeed,
         // ---- 2.6: fixed Denon SC6000M profile (from the user's MIDI log) ----
         kCtrlProfile, kPlatDir,
+        // ---- 2.7: platter as hand (the SC6000M motor does not turn in computer mode) ----
+        kPlatMode,
         kNumParams
     };
 
@@ -175,7 +177,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2600;
+        i.version = 2700;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -371,6 +373,9 @@ public:
         text("platspeed", "Platter Speed");
         addParam(choiceParam("ctrlprof", "Controller", {"LERNEN", "SC6000M"}, 0));
         addParam(choiceParam("platdir", "Platter Dir", {"NORMAL", "UMGEKEHRT"}, 0));
+        // HAND: the platter is your hand on the record, SKRATCHA's own motor plays it (PLAY = start/stop);
+        // MOTOR: the platter is the record itself (only when its motor really turns)
+        addParam(choiceParam("platmode", "Platter Mode", {"HAND", "MOTOR"}, 0));
         if (numParams() != kNumParams) mpc::log("SKRATCHA: parameter count mismatch %d %d", numParams(), (int)kNumParams);
 
         deckP_[0] = {kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kFader, kReverse, kLoop, kAngle, kCutLed, kStrobe, kASlot, kAStyle, kAVol, kAName, kANames};
@@ -1263,7 +1268,10 @@ private:
         {
             idleSamples_ += frames;
             const bool timeoutSource = handSrc_ != kSrcPitchBend || timeoutRelease_;
-            if (platFollowOn_ && handSrc_ == kSrcJog) { /* the real platter is the motor: the record stays where it is */ }
+            const bool platterIsMotor = platFollowOn_ && handSrc_ == kSrcJog && !(getInt(kCtrlProfile) == 1 && getInt(kPlatMode) == 0);
+            if (platterIsMotor) { /* the real platter is the motor: the record stays where it is */ }
+            // HAND: the platter only reports while it moves; 40 ms without a step = the hand has let go
+            else if (platFollowOn_ && handSrc_ == kSrcJog && idleSamples_ > (int)(0.040 * sr_)) letGo(D);
             else if (timeoutSource && idleSamples_ > (int)(0.120 * sr_)) letGo(D);
             // AUTO: the MPC strip does not always send the centre when the finger leaves; a finger that stops
             // sending for 55 ms has left the strip (moving fingers report every few ms)
@@ -1487,7 +1495,7 @@ private:
         const Record* rec = recOf(D);
         const double platRpm = getInt(kPlatRpm) == 1 ? 45.0 : 100.0 / 3.0;
         double pitchMul = 1.0;
-        if (getInt(kCtrlProfile) == 1)
+        if (getInt(kCtrlProfile) == 1 && getInt(kPlatMode) == 1)
         {
             static const double ranges[3] = {0.08, 0.16, 0.50};
             const DeckParams& P = deckP_[activeDeck_];
