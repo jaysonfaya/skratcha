@@ -49,6 +49,10 @@
 #include "skr_helper.h"
 
 #include <algorithm>
+#include <dirent.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <cerrno>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -165,6 +169,8 @@ public:
         kCtrlProfile, kPlatDir,
         // ---- 2.7: platter as hand (the SC6000M motor does not turn in computer mode) ----
         kPlatMode,
+        // ---- 2.7.1: search for the SC6000M motor command (writes into the MPC's own MIDI connection) ----
+        kMotorScan,
         kNumParams
     };
 
@@ -177,7 +183,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2700;
+        i.version = 2710;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -376,6 +382,7 @@ public:
         // HAND: the platter is your hand on the record, SKRATCHA's own motor plays it (PLAY = start/stop);
         // MOTOR: the platter is the record itself (only when its motor really turns)
         addParam(choiceParam("platmode", "Platter Mode", {"HAND", "MOTOR"}, 0));
+        addParam(fixed(boolParam("motorscan", "Motor Scan", false)));
         if (numParams() != kNumParams) mpc::log("SKRATCHA: parameter count mismatch %d %d", numParams(), (int)kNumParams);
 
         deckP_[0] = {kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kFader, kReverse, kLoop, kAngle, kCutLed, kStrobe, kASlot, kAStyle, kAVol, kAName, kANames};
@@ -407,6 +414,7 @@ public:
         if (worker_.joinable()) worker_.join();
         if (loader_.joinable()) loader_.join();
         if (scanner_.joinable()) scanner_.join();
+        if (motor_.joinable()) motor_.join();
         for (int d = 0; d < 2; ++d)
             for (int s = 0; s < kSlots; ++s)
             {
@@ -456,6 +464,7 @@ public:
             scanner_ = std::thread([this] { scanLoop(); });
             loader_ = std::thread([this] { loaderLoop(); });
             worker_ = std::thread([this] { reporterLoop(); });
+            motor_ = std::thread([this] { motorLoop(); });
         }
     }
 
@@ -537,6 +546,7 @@ public:
             const mpc::MidiEvent& ev = ctx.midi[e];
             if (ev.sampleOffset > pos) { render(ctx, pos, ev.sampleOffset); pos = ev.sampleOffset; }
             eventClock_ = blockClock_ + ev.sampleOffset;
+            if ((ev.data[0] & 0xF0) == 0xB0 && (ev.data[1] == 54 || ev.data[1] == 55)) platFrames_.fetch_add(1, std::memory_order_relaxed);
             { skr::MidiRec r; r.clock = (uint64_t)eventClock_; r.n = ev.size; r.b[0] = ev.data[0]; r.b[1] = ev.data[1]; r.b[2] = ev.data[2]; midiRing_.push(r); }
             if (scEvent(ev)) continue;
             if (platterEvent(ev)) continue;
@@ -3109,7 +3119,122 @@ private:
     std::atomic<int> numFiles_{0}, filesVersion_{0};
     std::atomic<int> loadRequest_{0};
     std::atomic<bool> rescanRequested_{false}, needDisplayUpdate_{false}, stopThread_{false};
-    std::thread worker_, loader_, scanner_;
+    std::thread worker_, loader_, scanner_, motor_;
+    std::atomic<uint32_t> platFrames_{0};
+
+    // ---------------- SC6000M motor search ----------------
+    // The host throws away plugin MIDI and holds the SC6000M's MIDI port itself. SKRATCHA runs inside the MPC
+    // process, so it can write into that already open connection. Nothing is installed or changed; it only sends
+    // notes / controllers, exactly what a DJ program sends to the SC6000M.
+    static std::string readSmall(const std::string& path)
+    {
+        std::string out; FILE* f = std::fopen(path.c_str(), "r");
+        if (f == nullptr) return out;
+        char buf[4096]; size_t n = std::fread(buf, 1, sizeof(buf) - 1, f); std::fclose(f);
+        out.assign(buf, n); return out;
+    }
+    int findScOut(std::string& report)
+    {
+        int found = -1;
+        DIR* d = opendir("/proc/self/fd");
+        if (d == nullptr) { report += "kein /proc/self/fd\n"; return -1; }
+        while (dirent* e = readdir(d))
+        {
+            if (e->d_name[0] < '0' || e->d_name[0] > '9') continue;
+            char link[256]; const std::string p = std::string("/proc/self/fd/") + e->d_name;
+            const ssize_t n = readlink(p.c_str(), link, sizeof(link) - 1);
+            if (n <= 0) continue;
+            link[n] = 0;
+            if (std::strncmp(link, "/dev/snd/", 9) != 0) continue;
+            const std::string info = readSmall(std::string("/proc/self/fdinfo/") + e->d_name);
+            unsigned flags = 0; const size_t fp = info.find("flags:");
+            if (fp != std::string::npos) flags = (unsigned)std::strtoul(info.c_str() + fp + 6, nullptr, 8);
+            int c = -1, dv = -1; std::string name;
+            if (std::sscanf(link, "/dev/snd/midiC%dD%d", &c, &dv) == 2)
+            {
+                name = readSmall("/proc/asound/card" + std::to_string(c) + "/midi" + std::to_string(dv));
+                name = name.substr(0, name.find('\n'));
+            }
+            char line[400]; std::snprintf(line, sizeof(line), "fd %s -> %s  flags %o  %s\n", e->d_name, link, flags, name.c_str());
+            report += line;
+            if (!name.empty() && name.find("SC6000") != std::string::npos && (flags & 3) != 0 && found < 0) found = std::atoi(e->d_name);
+        }
+        closedir(d);
+        return found;
+    }
+    void motorLoop()
+    {
+        bool last = false;
+        while (!stopThread_.load())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            const bool on = getBool(kMotorScan);
+            if (on && !last) runMotorScan();
+            last = on;
+        }
+    }
+    void runMotorScan()
+    {
+        std::string log;
+        auto stamp = [] { char b[16]; std::time_t t = std::time(nullptr); std::strftime(b, sizeof(b), "%H:%M:%S ", std::localtime(&t)); return std::string(b); };
+        auto save = [&] {
+            if (FILE* f = std::fopen("/tmp/sc-motor.log", "w")) { std::fputs(log.c_str(), f); std::fclose(f); }
+        };
+        auto say = [&](const std::string& m) { log += stamp() + m + "\n"; save(); };
+        auto show = [&](const std::string& m) { setText(platInfo_, m, kPlatInfo); };
+        auto aborted = [&] { return stopThread_.load() || !getBool(kMotorScan); };
+        auto sleepMs = [&](int ms) { for (int i = 0; i < ms / 50 && !aborted(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(50)); };
+
+        say("SKRATCHA Motor-Suche (Plugin-Version)");
+        log += readSmall("/proc/asound/cards");
+        std::string rep;
+        const int fd = findScOut(rep);
+        log += rep; save();
+        if (fd < 0) { say("FEHLER: kein SC6000M-Ausgang im MPC-Prozess gefunden"); show("MOTOR: KEIN SC6000M-AUSGANG"); return; }
+        say("SC6000M-Ausgang = fd " + std::to_string(fd));
+        auto send = [&](int a, int b, int c) {
+            const uint8_t m[3] = {(uint8_t)a, (uint8_t)b, (uint8_t)c};
+            for (int i = 0; i < 20; ++i) { const ssize_t w = ::write(fd, m, 3); if (w == 3) return true; if (w < 0 && errno != EAGAIN && errno != EINTR) break; std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
+            return false;
+        };
+        if (!send(0xB0, 123, 0)) { say(std::string("FEHLER: Senden geht nicht: ") + std::strerror(errno)); show("MOTOR: SENDEN GEHT NICHT"); return; }
+        say("Senden geht.");
+        auto rate = [&] { const uint32_t a = platFrames_.load(); sleepMs(1000); return (int)(platFrames_.load() - a); };
+        const int base = (rate() + rate()) / 2;
+        const int th = std::max(200, base * 10 + 50);
+        say("Ruhe: " + std::to_string(base) + " Teller-Frames/s, Schwelle " + std::to_string(th));
+        int hits = 0;
+        std::string hitList;
+        auto probe = [&](int status, int num, const char* nm, int total) -> bool {
+            char t[64]; std::snprintf(t, sizeof(t), "MOTOR SUCHT: %s %d/%d  TREFFER %d", nm, num, total, hits); show(t);
+            send(status, num, 127);
+            sleepMs(1000);
+            const int r = rate();
+            if ((status & 0xF0) == 0x90) send(0x80 | (status & 15), num, 0); else send(status, num, 0);
+            if (aborted()) return false;
+            char l[96];
+            if (r > th)
+            {
+                ++hits; hitList += std::string(" ") + nm + " " + std::to_string(num);
+                std::snprintf(l, sizeof(l), "TREFFER: %s %d -> Teller dreht (%d Frames/s)", nm, num, r); say(l);
+                int i = 0; for (; i < 6 && !aborted(); ++i) if (rate() < th) break;
+                if (i >= 6) { say("Teller dreht nach AUS weiter -> Suche stoppt hier."); return false; }
+                say("  ... nach AUS wieder still.");
+            }
+            else { std::snprintf(l, sizeof(l), "%s %d: %d", nm, num, r); say(l); }
+            return true;
+        };
+        bool ok = true;
+        say("=== Noten Kanal 1 ===");
+        for (int n = 0; n <= 127 && ok; ++n) ok = probe(0x90, n, "NOTE", 127);
+        if (ok) say("=== CC Kanal 1 ===");
+        for (int n = 0; n <= 119 && ok; ++n) ok = probe(0xB0, n, "CC", 119);
+        say(std::string(aborted() ? "ABGEBROCHEN" : "FERTIG") + ". Treffer: " + std::to_string(hits) + hitList);
+        show(hits ? "MOTOR TREFFER:" + hitList : std::string(aborted() ? "MOTOR-SUCHE ABGEBROCHEN" : "MOTOR: KEIN TREFFER"));
+        const std::string pf = mpc::pluginFolder();
+        if (!pf.empty()) { const std::string dir = pf + "/SKRATCHA MIDI LOG"; ::mkdir(dir.c_str(), 0755);
+            if (FILE* f = std::fopen((dir + "/MOTOR-SUCHE.txt").c_str(), "w")) { std::fputs(log.c_str(), f); std::fclose(f); } }
+    }
     static constexpr int kWords = (kNumParams + 63) / 64;
     std::atomic<int> folderTop_{0}, fileTop_{0}, numFolders_{0};
     std::atomic<bool> rescanDone_{false};

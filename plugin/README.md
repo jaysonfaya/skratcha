@@ -135,6 +135,7 @@ Dafür gibt es das zweite Plugin **SKRATCHA FEED**. Es kommt als Insert auf die 
 - **Neu in 2.7: Platter Mode HAND / MOTOR** (Reiter SC6000M, neben TELLER FOLGT). Im Computer-Modus dreht der Motor des SC6000M nicht – der Teller ist dann wie ein grosses Jogwheel.
   - **HAND (Standard):** Der SKRATCHA-Motor spielt die Platte. PLAY am SC6000M startet und stoppt. Sobald du den Teller drehst, ist das deine Hand auf der Platte (Scratch, Backspin, Abbremsen). Lässt du los, läuft die Platte mit dem Plugin-Motor weiter (wie „After Scratch = RUN ON“). Der Pitch-Fader des SC6000M stellt das Pitch des Decks.
   - **MOTOR:** Nur wenn der Teller wirklich vom Motor gedreht wird. Dann ist der Teller die Platte selbst; steht er, steht die Platte.
+- **Neu in 2.7.1: MOTOR SUCHEN** (Reiter SC6000M, links unten). Sucht automatisch den Befehl, mit dem der SC6000M-Motor im Computer-Modus anläuft: SKRATCHA schickt nacheinander alle Noten und CCs über die MIDI-Verbindung der MPC an den SC6000M und misst, ob der Teller danach dreht. Dauer ca. 9 Minuten, Fortschritt in der gelben Teller-Zeile. Protokoll: `/tmp/sc-motor.log` und `SKRATCHA MIDI LOG/MOTOR-SUCHE.txt`. Abbrechen: Schalter wieder aus.
 - **Grenzen:** SKRATCHA kann kein MIDI senden. Motor, Lichter und Display des SC6000M lassen sich deshalb nicht vom Plugin steuern. Ob die MPC den SC6000M als MIDI-Gerät annimmt, zeigt erst der Test.
 
 ## LERNEN
