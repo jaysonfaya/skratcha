@@ -1,4 +1,4 @@
-# SKRATCHA 2.2 – zwei Scratch-Plattenspieler für die MPC
+# SKRATCHA 2.3 – zwei Scratch-Plattenspieler für die MPC
 
 Von **JJ DA PLUG**. Instrument-Plugin für die MPC Live III / XL (arm64) und die MPC Live / Live II / One (arm32), gebaut mit dem offiziellen MPC Plugin SDK.
 
@@ -89,7 +89,8 @@ Rechts liegen die Schalter per Touch: Slip, Hamster, Strip Invert, Pad 1 = C#1, 
 - **Ordner:** Tippen wählt den Ordner aus, rechts erscheinen seine WAVs. **Zweimal tippen** (oder ÖFFNEN) geht hinein, **[..] ZURÜCK** oder ZURÜCK geht eine Ebene hoch. Oben steht der Pfad.
 - **Datei:** Tippen spielt sie mit AUTO-HÖREN an. **Zweimal tippen** (oder LADEN) legt sie in den aktuellen Slot des aktiven Decks.
 - **Laden in einen bestimmten Slot:** Auf einen der 8 Slots rechts tippen.
-- **Blättern:** Mit dem **orangen Schieber** neben jeder Liste wischst du durch die Liste. Die Pfeile springen eine Zeile oder eine Seite weiter. Q-Link 1 und 2 wählen Ordner und Datei.
+- **Blättern:** **Wische direkt auf der Liste** nach oben oder unten, so wie am Handy. Der orange Schieber daneben springt grob durch lange Listen. Die Pfeile gehen eine Zeile oder eine Seite weiter. Q-Link 1 und 2 wählen Ordner und Datei.
+- Jedes Tippen auf eine Zeile wählt sie aus, auch wenn sie schon gewählt war. Deshalb reagiert jetzt auch der zweite Tipp immer.
 
 ## LERNEN
 - **0 GRUNDLAGEN:** Tippe ÜBEN. In 10 Schritten lernst du START, STOP, Sample wählen, Strip berühren, scratchen, loslassen, CUT, Crossfader, Deck B und zurück zu Deck A.
@@ -101,9 +102,11 @@ Rechts liegen die Schalter per Touch: Slip, Hamster, Strip Invert, Pad 1 = C#1, 
   - Auch hier zeigt das MPC-Bild, was du benutzen sollst, zum Beispiel Strip und Pad 9 für Forward und Chirp.
 
 ## Mitgelieferte Samples
-- **Vocals zum Scratchen:** AHH, FRESH, YEAH, HEY, UH, GO, COME ON, CHECK IT. Sie liegen auf Deck A.
-- **Weitere Sounds:** BREAK 92, STAB, HORN, BASS DROP, OOH WAH, TONE 1K. Sie liegen auf Deck B.
-- Alle sind selbst synthetisiert und damit frei.
+- **Deck A – alte Radioreden (gemeinfrei):**
+  - 01–06 **FDR 1941:** Franklin D. Roosevelts Rede vor dem Kongress am 8. Dezember 1941.
+  - 07–08 **ARMSTRONG 1969:** Neil Armstrong bei der Mondlandung.
+  - Die Reden sind in kurze Phrasen geschnitten, gefiltert und normalisiert. Quellen und Lizenzen stehen in `Content/CREDITS.txt`.
+- **Deck B – eigene Sounds (21–34):** AHH, FRESH, YEAH, HEY, UH, GO, COME ON, CHECK IT, BREAK 92, STAB, HORN, BASS DROP, OOH WAH, TONE 1K. Alle sind selbst synthetisiert.
 - **Echte Acapellas** sind nicht dabei. Bei den freien Packs darf man die Dateien meistens nicht in einem Plugin weitergeben. Lade sie selbst herunter und finde sie dann über den BROWSER auf deinem Laufwerk. Quellen:
   - freesound.org: Filter „Creative Commons 0“, Suche „acapella“ oder „rap vocal“.
   - samplefocus.com: Einträge „Public Domain“.
@@ -117,6 +120,13 @@ Im Plugin-Ordner unter `Plugin Skins/browser_images/` liegen zwei Bilder, nach A
 Ob die MPC diese Bilder auch bei externen VST-Plugins anzeigt, ist noch nicht bestätigt.
 
 ## Technik (ehrlich)
+- **Neu in 2.3 – Timing:**
+  - **Loslassen = AUTO** (neuer Standard). Die Platte läuft weiter, sobald der Strip in die Mitte springt **oder** dein Finger 55 ms lang keine Bewegung mehr meldet. Vorher wartete das Plugin bis zu 1 s, weil der MPC-Strip beim Loslassen nicht immer die Mitte sendet.
+  - Am PC gemessen: Vom Loslassen bis zum vollen Tempo dauert es jetzt etwa 55 ms, ohne Mitte-Signal etwa 100 ms. In 2.2 war es bis zu 1 s.
+  - **Start 300 ms, Bremse 400 ms** (vorher 700 / 900). Das entspricht einem schnellen Battle-Plattenspieler. In SETUP lässt sich beides wie bisher ändern.
+  - **Catch 15 ms, Smooth 1,6 ms, Gleiten höchstens 6 ms.** Die Platte hängt damit enger an deiner Hand. Die Tonhöhe folgt weiterhin auf wenige Cent genau.
+  - **Wichtig:** Ein Finger, der still auf dem Strip liegt, gilt bei AUTO als losgelassen, denn der Strip meldet dann nichts. Zum Festhalten der Platte nimmst du das Pad **HOLD**.
+  - Wer das alte Verhalten will, stellt in SETUP **Loslassen** auf CENTER oder TIMEOUT.
 - **Hand:**
   - Eingaben kommen über Pitch Bend (14 Bit, sample-genau), Mod Wheel, Q-Link (SCRATCH), die Platte auf dem Bildschirm oder Pad HOLD.
   - Das Ziel gleitet über den gemessenen Meldeabstand. Danach glättet eine kritisch gedämpfte Feder die Bewegung, damit kein Zippern entsteht.
@@ -133,6 +143,6 @@ Ob die MPC diese Bilder auch bei externen VST-Plugins anzeigt, ist noch nicht be
 
 ## Lizenzen
 - Code: MIT.
-- Samples: selbst synthetisiert.
+- Samples: Reden FDR 1941 (Public Domain Mark 1.0) und Armstrong 1969 (NASA, gemeinfrei), von Wikimedia Commons. Die übrigen Sounds sind selbst synthetisiert.
 - Grafiken: eigene Renderings mit dem JF-Logo des Erstellers.
 - Schriften in den Bildern: Rajdhani und Titillium Web (SIL OFL).

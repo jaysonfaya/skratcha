@@ -73,7 +73,7 @@ int main(int argc, char** argv)
     if (scen == "fast") seconds = 3.0;
     if (probe) sampleIndex = 8;   // SKRATCHA_TEST_SLOT8 = the probe record
     setp(kFireMode, 0.0f);
-    setp(kAutoRun, scen.find("autorun") != std::string::npos || scen.find("slip") != std::string::npos ? 1.0f : 0.0f);
+    setp(kAutoRun, scen.find("autorun") != std::string::npos || scen.find("slip") != std::string::npos || scen.find("rel_") != std::string::npos ? 1.0f : 0.0f);
     if (scen.find("slip") != std::string::npos) setp(kSlip, 1.0f);                                   // pads only cue (the scenarios start the motor with pad 9)
     setp(kASlot, (float)(std::min(sampleIndex, 8) - 1) / 7.0f);
     setp(kLoop, 1.0f);
@@ -107,6 +107,12 @@ int main(int argc, char** argv)
 
     if (scen == "baby" || scen == "tone_baby" || scen == "autorun") gesture(0.3, 3.3, 1.5, 0.35, -0.5);
     else if (scen == "fast" || scen == "tone_fast" || scen == "tone_extreme") gesture(0.2, 2.7, 6.0, 0.45, -0.6);
+    else if (scen == "rel_center" || scen == "rel_hold")
+    {
+        note(0, 47, true); note(100, 47, false);                 // motor on
+        for (double t = 1.0; t < 1.3; t += evStep / sr) pb((int)(t * sr), -0.2 - 0.5 * (t - 1.0) / 0.3);   // drag back
+        if (scen == "rel_center") pb((int)(1.3 * sr), 0.0);      // finger off: strip springs to the centre
+    }
     else if (scen == "hold_release" || scen == "slip")
     {
         note(0, 47, true); note(100, 47, false);                 // motor on (pad 12)

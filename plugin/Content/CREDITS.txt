@@ -1,0 +1,10 @@
+SKRATCHA - Standard-Samples / default samples
+
+01-06  FDR 1941  - Franklin D. Roosevelt, Rede vor dem US-Kongress, 8. Dezember 1941.
+       Quelle: Wikimedia Commons, "1941 Roosevelt speech pearlharbor p1.ogg" / "p2.ogg".
+       Lizenz: Public Domain Mark 1.0 (gemeinfrei, Werk der US-Regierung).
+07-08  ARMSTRONG 1969 - Neil Armstrong, Apollo 11, 20. Juli 1969.
+       Quelle: Wikimedia Commons, "Neil Armstrong small step.wav". Lizenz: NASA, gemeinfrei.
+       Die Aufnahmen wurden in kurze Phrasen geschnitten, gefiltert und normalisiert.
+
+21-34  Eigene, synthetisch erzeugte Stimmen-Stabs, Break, Horn, Bass und Testton (JJ DA PLUG).

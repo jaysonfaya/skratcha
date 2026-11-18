@@ -10237,10 +10237,21 @@
      }
     },
     {
-     "key": "skRow0_0",
+     "key": "skRow0",
      "value": {
       "version": 4,
       "actions": [
+       {
+        "version": 2,
+        "onAction": "Mouse Down",
+        "handler": "Toggle Switch",
+        "handleName": "Tap",
+        "additionalData": "",
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        }
+       },
        {
         "version": 2,
         "onAction": "Double Click",
@@ -10275,16 +10286,43 @@
         "version": 2,
         "componentData": {
          "version": 1,
-         "name": "Button",
-         "type": "Button",
+         "name": "Row",
+         "type": "Image",
          "data": {
           "version": 2,
-          "onImage": "sk_row_on.png",
-          "offImage": "sk_row_off.png",
-          "buttonId": 1,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
+          "imageType": "Regular",
+          "colour": "0",
+          "image": "sk_row_off.png"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 2,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "0 0 370 60",
+         "additionalInvalidatingHandles": []
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Swipe",
+         "type": "Knob",
+         "data": {
+          "version": 5,
+          "knobType": "FilmStrip",
+          "filmStrip": "sk_clear_f2.png",
+          "numFrames": 2,
+          "invert": false,
+          "dragOrientation": "Vertical",
+          "handleName": "Data"
          }
         },
         "handle remapping": {
@@ -10362,414 +10400,6 @@
          "whenVisible": "Always",
          "boundsType": "Absolute",
          "bounds": "0 0 354 60",
-         "additionalInvalidatingHandles": []
-        }
-       }
-      ]
-     }
-    },
-    {
-     "key": "skRow0_1",
-     "value": {
-      "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Double Click",
-        "handler": "Toggle Switch",
-        "handleName": "Dbl",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
-      "backgroundData": {
-       "version": 1,
-       "focussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       },
-       "unfocussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       }
-      },
-      "ignoreMousePresses": false,
-      "disableCoarseDataWheel": false,
-      "repeats": 1,
-      "hideQLinkBounds": true,
-      "componentsData": [
-       {
-        "version": 2,
-        "componentData": {
-         "version": 1,
-         "name": "Button",
-         "type": "Button",
-         "data": {
-          "version": 2,
-          "onImage": "sk_row_on.png",
-          "offImage": "sk_row_off.png",
-          "buttonId": 2,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
-         }
-        },
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        },
-        "bounds": {
-         "version": 2,
-         "acceptsHWFocus": "No",
-         "showWhenDataModelInvalid": "Show",
-         "whenVisible": "Always",
-         "boundsType": "Absolute",
-         "bounds": "0 0 370 60",
-         "additionalInvalidatingHandles": []
-        }
-       }
-      ]
-     }
-    },
-    {
-     "key": "skRow0_2",
-     "value": {
-      "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Double Click",
-        "handler": "Toggle Switch",
-        "handleName": "Dbl",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
-      "backgroundData": {
-       "version": 1,
-       "focussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       },
-       "unfocussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       }
-      },
-      "ignoreMousePresses": false,
-      "disableCoarseDataWheel": false,
-      "repeats": 1,
-      "hideQLinkBounds": true,
-      "componentsData": [
-       {
-        "version": 2,
-        "componentData": {
-         "version": 1,
-         "name": "Button",
-         "type": "Button",
-         "data": {
-          "version": 2,
-          "onImage": "sk_row_on.png",
-          "offImage": "sk_row_off.png",
-          "buttonId": 3,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
-         }
-        },
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        },
-        "bounds": {
-         "version": 2,
-         "acceptsHWFocus": "No",
-         "showWhenDataModelInvalid": "Show",
-         "whenVisible": "Always",
-         "boundsType": "Absolute",
-         "bounds": "0 0 370 60",
-         "additionalInvalidatingHandles": []
-        }
-       }
-      ]
-     }
-    },
-    {
-     "key": "skRow0_3",
-     "value": {
-      "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Double Click",
-        "handler": "Toggle Switch",
-        "handleName": "Dbl",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
-      "backgroundData": {
-       "version": 1,
-       "focussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       },
-       "unfocussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       }
-      },
-      "ignoreMousePresses": false,
-      "disableCoarseDataWheel": false,
-      "repeats": 1,
-      "hideQLinkBounds": true,
-      "componentsData": [
-       {
-        "version": 2,
-        "componentData": {
-         "version": 1,
-         "name": "Button",
-         "type": "Button",
-         "data": {
-          "version": 2,
-          "onImage": "sk_row_on.png",
-          "offImage": "sk_row_off.png",
-          "buttonId": 4,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
-         }
-        },
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        },
-        "bounds": {
-         "version": 2,
-         "acceptsHWFocus": "No",
-         "showWhenDataModelInvalid": "Show",
-         "whenVisible": "Always",
-         "boundsType": "Absolute",
-         "bounds": "0 0 370 60",
-         "additionalInvalidatingHandles": []
-        }
-       }
-      ]
-     }
-    },
-    {
-     "key": "skRow0_4",
-     "value": {
-      "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Double Click",
-        "handler": "Toggle Switch",
-        "handleName": "Dbl",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
-      "backgroundData": {
-       "version": 1,
-       "focussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       },
-       "unfocussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       }
-      },
-      "ignoreMousePresses": false,
-      "disableCoarseDataWheel": false,
-      "repeats": 1,
-      "hideQLinkBounds": true,
-      "componentsData": [
-       {
-        "version": 2,
-        "componentData": {
-         "version": 1,
-         "name": "Button",
-         "type": "Button",
-         "data": {
-          "version": 2,
-          "onImage": "sk_row_on.png",
-          "offImage": "sk_row_off.png",
-          "buttonId": 5,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
-         }
-        },
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        },
-        "bounds": {
-         "version": 2,
-         "acceptsHWFocus": "No",
-         "showWhenDataModelInvalid": "Show",
-         "whenVisible": "Always",
-         "boundsType": "Absolute",
-         "bounds": "0 0 370 60",
-         "additionalInvalidatingHandles": []
-        }
-       }
-      ]
-     }
-    },
-    {
-     "key": "skRow0_5",
-     "value": {
-      "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Double Click",
-        "handler": "Toggle Switch",
-        "handleName": "Dbl",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
-      "backgroundData": {
-       "version": 1,
-       "focussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       },
-       "unfocussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       }
-      },
-      "ignoreMousePresses": false,
-      "disableCoarseDataWheel": false,
-      "repeats": 1,
-      "hideQLinkBounds": true,
-      "componentsData": [
-       {
-        "version": 2,
-        "componentData": {
-         "version": 1,
-         "name": "Button",
-         "type": "Button",
-         "data": {
-          "version": 2,
-          "onImage": "sk_row_on.png",
-          "offImage": "sk_row_off.png",
-          "buttonId": 6,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
-         }
-        },
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        },
-        "bounds": {
-         "version": 2,
-         "acceptsHWFocus": "No",
-         "showWhenDataModelInvalid": "Show",
-         "whenVisible": "Always",
-         "boundsType": "Absolute",
-         "bounds": "0 0 370 60",
-         "additionalInvalidatingHandles": []
-        }
-       }
-      ]
-     }
-    },
-    {
-     "key": "skRow0_6",
-     "value": {
-      "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Double Click",
-        "handler": "Toggle Switch",
-        "handleName": "Dbl",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
-      "backgroundData": {
-       "version": 1,
-       "focussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       },
-       "unfocussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       }
-      },
-      "ignoreMousePresses": false,
-      "disableCoarseDataWheel": false,
-      "repeats": 1,
-      "hideQLinkBounds": true,
-      "componentsData": [
-       {
-        "version": 2,
-        "componentData": {
-         "version": 1,
-         "name": "Button",
-         "type": "Button",
-         "data": {
-          "version": 2,
-          "onImage": "sk_row_on.png",
-          "offImage": "sk_row_off.png",
-          "buttonId": 7,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
-         }
-        },
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        },
-        "bounds": {
-         "version": 2,
-         "acceptsHWFocus": "No",
-         "showWhenDataModelInvalid": "Show",
-         "whenVisible": "Always",
-         "boundsType": "Absolute",
-         "bounds": "0 0 370 60",
          "additionalInvalidatingHandles": []
         }
        }
@@ -11223,10 +10853,21 @@
      }
     },
     {
-     "key": "skRow1_0",
+     "key": "skRow1",
      "value": {
       "version": 4,
       "actions": [
+       {
+        "version": 2,
+        "onAction": "Mouse Down",
+        "handler": "Toggle Switch",
+        "handleName": "Tap",
+        "additionalData": "",
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        }
+       },
        {
         "version": 2,
         "onAction": "Double Click",
@@ -11261,16 +10902,43 @@
         "version": 2,
         "componentData": {
          "version": 1,
-         "name": "Button",
-         "type": "Button",
+         "name": "Row",
+         "type": "Image",
          "data": {
           "version": 2,
-          "onImage": "sk_row2_on.png",
-          "offImage": "sk_row2_off.png",
-          "buttonId": 1,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
+          "imageType": "Regular",
+          "colour": "0",
+          "image": "sk_row2_off.png"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 2,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "0 0 342 60",
+         "additionalInvalidatingHandles": []
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Swipe",
+         "type": "Knob",
+         "data": {
+          "version": 5,
+          "knobType": "FilmStrip",
+          "filmStrip": "sk_clear_f2.png",
+          "numFrames": 2,
+          "invert": false,
+          "dragOrientation": "Vertical",
+          "handleName": "Data"
          }
         },
         "handle remapping": {
@@ -11348,414 +11016,6 @@
          "whenVisible": "Always",
          "boundsType": "Absolute",
          "bounds": "0 0 326 60",
-         "additionalInvalidatingHandles": []
-        }
-       }
-      ]
-     }
-    },
-    {
-     "key": "skRow1_1",
-     "value": {
-      "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Double Click",
-        "handler": "Toggle Switch",
-        "handleName": "Dbl",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
-      "backgroundData": {
-       "version": 1,
-       "focussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       },
-       "unfocussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       }
-      },
-      "ignoreMousePresses": false,
-      "disableCoarseDataWheel": false,
-      "repeats": 1,
-      "hideQLinkBounds": true,
-      "componentsData": [
-       {
-        "version": 2,
-        "componentData": {
-         "version": 1,
-         "name": "Button",
-         "type": "Button",
-         "data": {
-          "version": 2,
-          "onImage": "sk_row2_on.png",
-          "offImage": "sk_row2_off.png",
-          "buttonId": 2,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
-         }
-        },
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        },
-        "bounds": {
-         "version": 2,
-         "acceptsHWFocus": "No",
-         "showWhenDataModelInvalid": "Show",
-         "whenVisible": "Always",
-         "boundsType": "Absolute",
-         "bounds": "0 0 342 60",
-         "additionalInvalidatingHandles": []
-        }
-       }
-      ]
-     }
-    },
-    {
-     "key": "skRow1_2",
-     "value": {
-      "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Double Click",
-        "handler": "Toggle Switch",
-        "handleName": "Dbl",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
-      "backgroundData": {
-       "version": 1,
-       "focussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       },
-       "unfocussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       }
-      },
-      "ignoreMousePresses": false,
-      "disableCoarseDataWheel": false,
-      "repeats": 1,
-      "hideQLinkBounds": true,
-      "componentsData": [
-       {
-        "version": 2,
-        "componentData": {
-         "version": 1,
-         "name": "Button",
-         "type": "Button",
-         "data": {
-          "version": 2,
-          "onImage": "sk_row2_on.png",
-          "offImage": "sk_row2_off.png",
-          "buttonId": 3,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
-         }
-        },
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        },
-        "bounds": {
-         "version": 2,
-         "acceptsHWFocus": "No",
-         "showWhenDataModelInvalid": "Show",
-         "whenVisible": "Always",
-         "boundsType": "Absolute",
-         "bounds": "0 0 342 60",
-         "additionalInvalidatingHandles": []
-        }
-       }
-      ]
-     }
-    },
-    {
-     "key": "skRow1_3",
-     "value": {
-      "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Double Click",
-        "handler": "Toggle Switch",
-        "handleName": "Dbl",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
-      "backgroundData": {
-       "version": 1,
-       "focussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       },
-       "unfocussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       }
-      },
-      "ignoreMousePresses": false,
-      "disableCoarseDataWheel": false,
-      "repeats": 1,
-      "hideQLinkBounds": true,
-      "componentsData": [
-       {
-        "version": 2,
-        "componentData": {
-         "version": 1,
-         "name": "Button",
-         "type": "Button",
-         "data": {
-          "version": 2,
-          "onImage": "sk_row2_on.png",
-          "offImage": "sk_row2_off.png",
-          "buttonId": 4,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
-         }
-        },
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        },
-        "bounds": {
-         "version": 2,
-         "acceptsHWFocus": "No",
-         "showWhenDataModelInvalid": "Show",
-         "whenVisible": "Always",
-         "boundsType": "Absolute",
-         "bounds": "0 0 342 60",
-         "additionalInvalidatingHandles": []
-        }
-       }
-      ]
-     }
-    },
-    {
-     "key": "skRow1_4",
-     "value": {
-      "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Double Click",
-        "handler": "Toggle Switch",
-        "handleName": "Dbl",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
-      "backgroundData": {
-       "version": 1,
-       "focussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       },
-       "unfocussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       }
-      },
-      "ignoreMousePresses": false,
-      "disableCoarseDataWheel": false,
-      "repeats": 1,
-      "hideQLinkBounds": true,
-      "componentsData": [
-       {
-        "version": 2,
-        "componentData": {
-         "version": 1,
-         "name": "Button",
-         "type": "Button",
-         "data": {
-          "version": 2,
-          "onImage": "sk_row2_on.png",
-          "offImage": "sk_row2_off.png",
-          "buttonId": 5,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
-         }
-        },
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        },
-        "bounds": {
-         "version": 2,
-         "acceptsHWFocus": "No",
-         "showWhenDataModelInvalid": "Show",
-         "whenVisible": "Always",
-         "boundsType": "Absolute",
-         "bounds": "0 0 342 60",
-         "additionalInvalidatingHandles": []
-        }
-       }
-      ]
-     }
-    },
-    {
-     "key": "skRow1_5",
-     "value": {
-      "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Double Click",
-        "handler": "Toggle Switch",
-        "handleName": "Dbl",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
-      "backgroundData": {
-       "version": 1,
-       "focussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       },
-       "unfocussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       }
-      },
-      "ignoreMousePresses": false,
-      "disableCoarseDataWheel": false,
-      "repeats": 1,
-      "hideQLinkBounds": true,
-      "componentsData": [
-       {
-        "version": 2,
-        "componentData": {
-         "version": 1,
-         "name": "Button",
-         "type": "Button",
-         "data": {
-          "version": 2,
-          "onImage": "sk_row2_on.png",
-          "offImage": "sk_row2_off.png",
-          "buttonId": 6,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
-         }
-        },
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        },
-        "bounds": {
-         "version": 2,
-         "acceptsHWFocus": "No",
-         "showWhenDataModelInvalid": "Show",
-         "whenVisible": "Always",
-         "boundsType": "Absolute",
-         "bounds": "0 0 342 60",
-         "additionalInvalidatingHandles": []
-        }
-       }
-      ]
-     }
-    },
-    {
-     "key": "skRow1_6",
-     "value": {
-      "version": 4,
-      "actions": [
-       {
-        "version": 2,
-        "onAction": "Double Click",
-        "handler": "Toggle Switch",
-        "handleName": "Dbl",
-        "additionalData": "",
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        }
-       }
-      ],
-      "backgroundData": {
-       "version": 1,
-       "focussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       },
-       "unfocussed": {
-        "version": 1,
-        "colour": "0",
-        "image": ""
-       }
-      },
-      "ignoreMousePresses": false,
-      "disableCoarseDataWheel": false,
-      "repeats": 1,
-      "hideQLinkBounds": true,
-      "componentsData": [
-       {
-        "version": 2,
-        "componentData": {
-         "version": 1,
-         "name": "Button",
-         "type": "Button",
-         "data": {
-          "version": 2,
-          "onImage": "sk_row2_on.png",
-          "offImage": "sk_row2_off.png",
-          "buttonId": 7,
-          "numButtonsInGroup": 8,
-          "handleName": "Data",
-          "gestureBehaviour": "Instant"
-         }
-        },
-        "handle remapping": {
-         "version": 1,
-         "map": []
-        },
-        "bounds": {
-         "version": 2,
-         "acceptsHWFocus": "No",
-         "showWhenDataModelInvalid": "Show",
-         "whenVisible": "Always",
-         "boundsType": "Absolute",
-         "bounds": "0 0 342 60",
          "additionalInvalidatingHandles": []
         }
        }
@@ -24696,7 +23956,7 @@
         "componentData": {
          "version": 1,
          "name": "row00",
-         "type": "skRow0_0",
+         "type": "skRow0",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -24707,7 +23967,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 132"
+           "value": "Parameter 176"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 162"
           },
           {
            "key": "Dbl",
@@ -24760,7 +24024,7 @@
         "componentData": {
          "version": 1,
          "name": "row01",
-         "type": "skRow0_1",
+         "type": "skRow0",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -24771,7 +24035,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 132"
+           "value": "Parameter 176"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 163"
           },
           {
            "key": "Dbl",
@@ -24824,7 +24092,7 @@
         "componentData": {
          "version": 1,
          "name": "row02",
-         "type": "skRow0_2",
+         "type": "skRow0",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -24835,7 +24103,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 132"
+           "value": "Parameter 176"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 164"
           },
           {
            "key": "Dbl",
@@ -24888,7 +24160,7 @@
         "componentData": {
          "version": 1,
          "name": "row03",
-         "type": "skRow0_3",
+         "type": "skRow0",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -24899,7 +24171,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 132"
+           "value": "Parameter 176"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 165"
           },
           {
            "key": "Dbl",
@@ -24952,7 +24228,7 @@
         "componentData": {
          "version": 1,
          "name": "row04",
-         "type": "skRow0_4",
+         "type": "skRow0",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -24963,7 +24239,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 132"
+           "value": "Parameter 176"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 166"
           },
           {
            "key": "Dbl",
@@ -25016,7 +24296,7 @@
         "componentData": {
          "version": 1,
          "name": "row05",
-         "type": "skRow0_5",
+         "type": "skRow0",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -25027,7 +24307,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 132"
+           "value": "Parameter 176"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 167"
           },
           {
            "key": "Dbl",
@@ -25080,7 +24364,7 @@
         "componentData": {
          "version": 1,
          "name": "row06",
-         "type": "skRow0_6",
+         "type": "skRow0",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -25091,7 +24375,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 132"
+           "value": "Parameter 176"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 168"
           },
           {
            "key": "Dbl",
@@ -25324,7 +24612,7 @@
         "componentData": {
          "version": 1,
          "name": "row10",
-         "type": "skRow1_0",
+         "type": "skRow1",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -25335,7 +24623,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 133"
+           "value": "Parameter 177"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 169"
           },
           {
            "key": "Dbl",
@@ -25388,7 +24680,7 @@
         "componentData": {
          "version": 1,
          "name": "row11",
-         "type": "skRow1_1",
+         "type": "skRow1",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -25399,7 +24691,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 133"
+           "value": "Parameter 177"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 170"
           },
           {
            "key": "Dbl",
@@ -25452,7 +24748,7 @@
         "componentData": {
          "version": 1,
          "name": "row12",
-         "type": "skRow1_2",
+         "type": "skRow1",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -25463,7 +24759,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 133"
+           "value": "Parameter 177"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 171"
           },
           {
            "key": "Dbl",
@@ -25516,7 +24816,7 @@
         "componentData": {
          "version": 1,
          "name": "row13",
-         "type": "skRow1_3",
+         "type": "skRow1",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -25527,7 +24827,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 133"
+           "value": "Parameter 177"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 172"
           },
           {
            "key": "Dbl",
@@ -25580,7 +24884,7 @@
         "componentData": {
          "version": 1,
          "name": "row14",
-         "type": "skRow1_4",
+         "type": "skRow1",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -25591,7 +24895,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 133"
+           "value": "Parameter 177"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 173"
           },
           {
            "key": "Dbl",
@@ -25644,7 +24952,7 @@
         "componentData": {
          "version": 1,
          "name": "row15",
-         "type": "skRow1_5",
+         "type": "skRow1",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -25655,7 +24963,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 133"
+           "value": "Parameter 177"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 174"
           },
           {
            "key": "Dbl",
@@ -25708,7 +25020,7 @@
         "componentData": {
          "version": 1,
          "name": "row16",
-         "type": "skRow1_6",
+         "type": "skRow1",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -25719,7 +25031,11 @@
          "map": [
           {
            "key": "Data",
-           "value": "Parameter 133"
+           "value": "Parameter 177"
+          },
+          {
+           "key": "Tap",
+           "value": "Parameter 175"
           },
           {
            "key": "Dbl",

@@ -145,7 +145,9 @@ public:
         // ---- 2.2 ----
         kLookTap, kLayoutHint, kCutLatch, kHoldLatch, kFolderOpenTap, kFolderBackTap, kFileLoadTap, kFolderPos, kFilePos,
         kBrPath, kHint, kSync, kDesignName, kPadCutA, kPadCutB, kAFix,
-        kNumParams = kAFix + 4
+        // ---- 2.3: browser rows by touch: tap = select, swipe = scroll ----
+        kDTap = kAFix + 4, kFTap = kDTap + 7, kFolderScroll = kFTap + 7, kFileScroll,
+        kNumParams
     };
 
     struct DeckParams { int play, speed, pitch, prange, start, brake, chan, reverse, loop, angle, cutled, strobe, slot, style, vol, name, names; };
@@ -156,7 +158,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2200;
+        i.version = 2300;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -177,13 +179,13 @@ public:
         addParam(choiceParam("speed", "A Speed", {"33", "45"}, 0));
         addParam(floatParam("pitch", "A Pitch", -100.0f, 100.0f, 0.0f, "%", 1));
         addParam(choiceParam("prange", "A Pitch Rng", {"8%", "16%", "50%"}, 0));
-        addParam(logParam("start", "A Start Time", 30.0f, 3000.0f, 700.0f, "ms", 0));
-        addParam(logParam("brake", "A Brake Time", 30.0f, 5000.0f, 900.0f, "ms", 0));
+        addParam(logParam("start", "A Start Time", 30.0f, 3000.0f, 300.0f, "ms", 0));
+        addParam(logParam("brake", "A Brake Time", 30.0f, 5000.0f, 400.0f, "ms", 0));
         addParam(floatParam("srange", "Strip Range", 45.0f, 720.0f, 180.0f, "deg", 0));  // record turn for the whole strip
         addParam(choiceParam("sdir", "Strip Dir", {"NORMAL", "INVERT"}, 0));
-        addParam(choiceParam("release", "Release", {"CENTER", "TIMEOUT"}, 0));
-        addParam(logParam("smooth", "Smooth", 0.5f, 20.0f, 3.0f, "ms", 1));
-        addParam(logParam("catch", "Catch", 10.0f, 500.0f, 90.0f, "ms", 0));
+        addParam(choiceParam("release", "Release", {"CENTER", "TIMEOUT", "AUTO"}, 2));   // AUTO: centre or the finger stops
+        addParam(logParam("smooth", "Smooth", 0.5f, 20.0f, 1.6f, "ms", 1));
+        addParam(logParam("catch", "Catch", 5.0f, 500.0f, 15.0f, "ms", 0));
         addParam(choiceParam("curve", "Cut Speed", {"SHARP", "MEDIUM", "SOFT"}, 0));     // CUT pad ramp 0.7 / 3 / 12 ms
         addParam(boolParam("fader", "A On", true));                                       // deck A channel on
         addParam(boolParam("reverse", "A Reverse", false));
@@ -215,8 +217,8 @@ public:
         addParam(choiceParam("bspeed", "B Speed", {"33", "45"}, 0));
         addParam(floatParam("bpitch", "B Pitch", -100.0f, 100.0f, 0.0f, "%", 1));
         addParam(choiceParam("bprange", "B Pitch Rng", {"8%", "16%", "50%"}, 0));
-        addParam(logParam("bstart", "B Start Time", 30.0f, 3000.0f, 700.0f, "ms", 0));
-        addParam(logParam("bbrake", "B Brake Time", 30.0f, 5000.0f, 900.0f, "ms", 0));
+        addParam(logParam("bstart", "B Start Time", 30.0f, 3000.0f, 300.0f, "ms", 0));
+        addParam(logParam("bbrake", "B Brake Time", 30.0f, 5000.0f, 400.0f, "ms", 0));
         addParam(boolParam("bfader", "B On", true));
         addParam(boolParam("breverse", "B Reverse", false));
         addParam(boolParam("bloop", "B Loop", true));
@@ -257,8 +259,8 @@ public:
         addParam(choiceParam("cspeed", "Speed", {"33", "45"}, 0));
         addParam(floatParam("cpitch", "Pitch", -100.0f, 100.0f, 0.0f, "%", 1));
         addParam(choiceParam("cprange", "Pitch Range", {"8%", "16%", "50%"}, 0));
-        addParam(logParam("cstart", "Start Time", 30.0f, 3000.0f, 700.0f, "ms", 0));
-        addParam(logParam("cbrake", "Brake Time", 30.0f, 5000.0f, 900.0f, "ms", 0));
+        addParam(logParam("cstart", "Start Time", 30.0f, 3000.0f, 300.0f, "ms", 0));
+        addParam(logParam("cbrake", "Brake Time", 30.0f, 5000.0f, 400.0f, "ms", 0));
         addParam(boolParam("con", "Deck On", true));
         addParam(boolParam("crev", "Reverse", false));
         addParam(boolParam("cloop", "Loop", true));
@@ -307,6 +309,11 @@ public:
         addParam(live(boolParam("padcuta", "Pad Cut A", false)));
         addParam(live(boolParam("padcutb", "Pad Cut B", false)));
         for (int k = 0; k < 4; ++k) { const std::string id = "afix" + std::to_string(k + 1); text(id.c_str(), ("Deck A Slot " + std::to_string(k + 1)).c_str()); }
+        // ---- 2.3 ----
+        for (int r = 0; r < 7; ++r) addParam(fixed(boolParam(("dtap" + std::to_string(r + 1)).c_str(), ("Folder Tap " + std::to_string(r + 1)).c_str(), false)));
+        for (int r = 0; r < 7; ++r) addParam(fixed(boolParam(("ftap" + std::to_string(r + 1)).c_str(), ("File Tap " + std::to_string(r + 1)).c_str(), false)));
+        addParam(fixed(floatParam("dscroll", "Folder Scroll", 0.0f, 1.0f, 0.5f, "", 3)));
+        addParam(fixed(floatParam("fscroll", "File Scroll", 0.0f, 1.0f, 0.5f, "", 3)));
         if (numParams() != kNumParams) mpc::log("SKRATCHA: parameter count mismatch %d %d", numParams(), (int)kNumParams);
 
         deckP_[0] = {kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kFader, kReverse, kLoop, kAngle, kCutLed, kStrobe, kASlot, kAStyle, kAVol, kAName, kANames};
@@ -879,7 +886,8 @@ private:
         }
         levelTarget_ = mpc::dsp::dbToGain(get(kLevel));
         crackle_ = get(kCrackle) * 0.01f;
-        timeoutRelease_ = getInt(kRelease) == 1;
+        releaseMode_ = mpc::clamp(getInt(kRelease), 0, 2);
+        timeoutRelease_ = releaseMode_ == 1;
         padBase_ = getInt(kPadBase) == 1 ? 37 : 36;
 
         // ---- the teacher ----
@@ -1037,6 +1045,9 @@ private:
             idleSamples_ += frames;
             const bool timeoutSource = handSrc_ != kSrcPitchBend || timeoutRelease_;
             if (timeoutSource && idleSamples_ > (int)(0.120 * sr_)) letGo(D);
+            // AUTO: the MPC strip does not always send the centre when the finger leaves; a finger that stops
+            // sending for 55 ms has left the strip (moving fingers report every few ms)
+            else if (handSrc_ == kSrcPitchBend && releaseMode_ == 2 && idleSamples_ > (int)(0.055 * sr_)) letGo(D);
             // safety for strips that never spring back to the centre: 1 s without a value = hand off
             else if (idleSamples_ > (int)(1.0 * sr_)) letGo(D);
         }
@@ -1120,7 +1131,7 @@ private:
         const double dt = now - lastEventClock_;
         lastEventClock_ = now;
         if (dt > 0.0 && dt < 0.025 * sr_)
-            eventInterval_ += (mpc::clamp(dt, 0.0003 * sr_, 0.012 * sr_) - eventInterval_) * 0.3;
+            eventInterval_ += (mpc::clamp(dt, 0.0003 * sr_, 0.006 * sr_) - eventInterval_) * 0.3;   // glide at most 6 ms
         D.rawTarget = raw;
         const double glide = (dt > 0.0 && dt < 0.025 * sr_) ? std::max(1.0, eventInterval_) : 1.0;
         D.interpLeft = (int)std::lround(glide);
@@ -1135,7 +1146,7 @@ private:
             const int pb = ev.pitchBend();
             if (pb == 0)
             {
-                if (D.handActive && handSrc_ == kSrcPitchBend && !timeoutRelease_) releasePending_ = (int)(0.025 * sr_);
+                if (D.handActive && handSrc_ == kSrcPitchBend && !timeoutRelease_) releasePending_ = (int)(0.008 * sr_);
                 return;
             }
             stripEvent((double)pb / 8192.0, kSrcPitchBend);
@@ -1710,6 +1721,10 @@ private:
         int lastHint = -1, lastSync = -1, lastTour = -1, lastDesign = -1, lastLayout = -1, lastRun = -1;
         int lastNF = -1, lastFilesVer = -1, lastPadCutA = -1, lastPadCutB = -1;
         float lastDPos = -1.0f, lastFPos = -1.0f;
+        float lastDTap[7], lastFTap[7];
+        for (int r = 0; r < 7; ++r) { lastDTap[r] = getNormalised(kDTap + r); lastFTap[r] = getNormalised(kFTap + r); }
+        float lastDScroll = getNormalised(kFolderScroll), lastFScroll = getNormalised(kFileScroll), accD = 0.0f, accF = 0.0f;
+        int idleD = 0, idleF = 0;
         float lastOpenTap = getNormalised(kFolderOpenTap), lastBackTap = getNormalised(kFolderBackTap), lastLoadTap = getNormalised(kFileLoadTap);
         const auto t0 = std::chrono::steady_clock::now();
         auto notify = [this](int idx) { if (effect_ != nullptr && host_ != nullptr) notifyHostParameterChanged(idx); };
@@ -1728,6 +1743,44 @@ private:
                 const int step = ds == 1 ? -1 : ds == 2 ? 1 : ds == 3 ? -7 : 7;
                 set(kBrFolder, (float)mpc::clamp(getInt(kBrFolder) + step, 1, std::max(1, nF))); notify(kBrFolder);
                 set(kFolderStep, 0.0f); notify(kFolderStep);
+            }
+            // tap a row (every tap flips its parameter), swipe on the list (relative scroll, re-centred when idle)
+            for (int r = 0; r < 7; ++r)
+            {
+                if (getNormalised(kDTap + r) != lastDTap[r])
+                {
+                    lastDTap[r] = getNormalised(kDTap + r);
+                    set(kBrFolder, (float)std::min(std::max(1, nF), folderTop_.load() + r + 1)); notify(kBrFolder);
+                }
+                if (getNormalised(kFTap + r) != lastFTap[r])
+                {
+                    lastFTap[r] = getNormalised(kFTap + r);
+                    set(kBrFile, (float)std::min(std::max(1, numFiles_.load()), fileTop_.load() + r + 1)); notify(kBrFile);
+                    if (getBool(kAutoPreview) && !getBool(kBrPreview)) { set(kBrPreview, 1.0f); notify(kBrPreview); }
+                }
+            }
+            auto swipe = [&](int param, float& lastV, float& acc, int& idle, std::atomic<int>& top, int count, int* bumpBase)
+            {
+                const float v = getNormalised(param);
+                if (std::fabs(v - lastV) > 1e-5f)
+                {
+                    acc += (v - lastV) * 40.0f;          // the whole knob travel = 40 rows
+                    lastV = v; idle = 0;
+                    const int steps = (int)acc;
+                    if (steps != 0)
+                    {
+                        acc -= (float)steps;
+                        const int t = mpc::clamp(top.load() + steps, 0, std::max(0, count - 7));
+                        top.store(t);
+                        for (int r = 0; r < 7; ++r) bump(bumpBase[0] + r);
+                    }
+                }
+                else if (++idle == 20 && std::fabs(v - 0.5f) > 1e-3f) { setNormalised(param, 0.5f); lastV = 0.5f; acc = 0.0f; notify(param); }
+            };
+            {
+                int bd[1] = {kDRows}, bf[1] = {kFRows};
+                swipe(kFolderScroll, lastDScroll, accD, idleD, folderTop_, nF, bd);
+                swipe(kFileScroll, lastFScroll, accF, idleF, fileTop_, numFiles_.load(), bf);
             }
             // folder slider (swipe through the list)
             if (std::fabs(getNormalised(kFolderPos) - lastDPos) > 1e-4f && nF > 0)
@@ -1952,6 +2005,7 @@ private:
     double blockClock_ = 0.0, eventClock_ = 0.0;
     int releasePending_ = 0, idleSamples_ = 0, stripLedFrame_ = 0;
     bool timeoutRelease_ = false;
+    int releaseMode_ = 2;
     float lastScratch_ = 50.0f, lastJog_ = 0.0f;
     int mwMsb_ = 64, mwLsb_ = 0;
     // pads, cut
