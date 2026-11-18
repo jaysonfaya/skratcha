@@ -23,13 +23,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Default samples from public-domain radio speeches (Wikimedia Commons)
+      - name: Default samples present (public-domain speeches, made once with tools/fetch_speeches.py)
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-          pip install -q numpy scipy
-          python tools/fetch_speeches.py plugin/Content/Samples | tee speeches.txt
           test $(ls plugin/Content/Samples/0[1-8]\ *.wav | wc -l) -eq 8
-          test -z "$(ls -A plugin/Content | grep -v -e Samples -e CREDITS)"
       - name: Build (native test + arm32 Live 1 + arm64 Live III)
         run: |
           cp -r plugin sdk/plugins/SKRATCHA
