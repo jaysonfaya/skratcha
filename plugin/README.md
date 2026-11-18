@@ -1,4 +1,4 @@
-# SKRATCHA 2.4.1 – zwei Scratch-Plattenspieler für die MPC
+# SKRATCHA 2.5.0 – zwei Scratch-Plattenspieler für die MPC
 
 Von **JJ DA PLUG**. Instrument-Plugin für die MPC Live III / XL (arm64) und die MPC Live / Live II / One (arm32), gebaut mit dem offiziellen MPC Plugin SDK.
 
@@ -120,6 +120,13 @@ Dafür gibt es das zweite Plugin **SKRATCHA FEED**. Es kommt als Insert auf die 
 - **Latenz:** Während LIVE kommt die Spur etwa 14 ms später, bei 128er-Audioblöcken. Bei größeren Blöcken der MPC ist es entsprechend mehr.
 - **Master:** FEED geht auch auf den Master. SKRATCHA schickt das live gescratchte Deck dann nur über den FEED zurück, nicht zusätzlich über die eigene Spur. So entsteht keine Rückkopplung.
 
+## SC6000M / MIDI-Controller (neu in 2.5)
+- **Reiter SC6000M:** Test-Assistent mit 12 Schritten und ein MIDI-Monitor, der zeigt, was gerade ankommt. Alles wird in einem Protokoll gespeichert: `SKRATCHA MIDI LOG/MIDI <Datum>.txt` im Plugin-Ordner.
+- **Teller erkennen:** Bei Schritt 2 (Motor läuft 10 s auf 33 U/min) findet SKRATCHA die Teller-Meldung selbst. Erkannt werden relative CCs (64 ± oder Zweierkomplement), absolute 7- und 14-Bit-CCs und Pitch Bend. SKRATCHA misst auch, wie viele Schritte eine Umdrehung hat. Ohne Motor geht es über Schritt 7 (genau 1 Umdrehung von Hand).
+- **TELLER FOLGT:** Das aktive Deck folgt dem echten Teller. 1 Umdrehung bei 33 1/3 (oder 45) entspricht der normalen Geschwindigkeit, egal welcher Plattenspieler im Plugin gewählt ist. Steht der Teller still, steht die Platte. Der zweite Layer (nächster MIDI-Kanal) schaltet auf Deck B.
+- Solange der Test läuft, steuern MIDI-Daten nichts in SKRATCHA. Bei TELLER FOLGT lösen alle Meldungen, die der Controller beim Test geschickt hat, keine Pads aus.
+- **Grenzen:** SKRATCHA kann kein MIDI senden. Motor, Lichter und Display des SC6000M lassen sich deshalb nicht vom Plugin steuern. Ob die MPC den SC6000M als MIDI-Gerät annimmt, zeigt erst der Test.
+
 ## LERNEN
 - **0 GRUNDLAGEN:** Tippe ÜBEN. In 10 Schritten lernst du START, STOP, Sample wählen, Strip berühren, scratchen, loslassen, CUT, Crossfader, Deck B und zurück zu Deck A.
   - Jeder Schritt geht erst weiter, wenn du ihn wirklich gemacht hast.
@@ -148,6 +155,7 @@ Im Plugin-Ordner unter `Plugin Skins/browser_images/` liegen zwei Bilder, nach A
 Ob die MPC diese Bilder auch bei externen VST-Plugins anzeigt, ist noch nicht bestätigt.
 
 ## Technik (ehrlich)
+- **Neu in 2.5:** DC-Blocker (3 Hz) am Ausgang. Eine still gehaltene Platte hinterlässt so keinen Gleichspannungs-Versatz mehr.
 - **Neu in 2.4:**
   - Lautheit pro Deck: gewichtete Leistung vor und nach der Era-Färbung (250 ms). Daraus wird eine Ausgleichs-Verstärkung (0,3–2,8×, 40 ms Gleiten), danach ein Sicherheits-Begrenzer ab −1 dBFS. Am PC gemessen liegen die 10 Plattenspieler mit Sprache innerhalb 0,5 dB, mit Break und Vocal innerhalb etwa 1,4 dB.
   - Designwechsel: alle Decks in einem Filmstreifen, die Labels sind immer da (Bild 0 leer). Nichts wird mehr ein- oder ausgeblendet.

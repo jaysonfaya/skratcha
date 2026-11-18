@@ -45,6 +45,7 @@
 
 #include "skr_record.h"
 #include "skr_feed.h"
+#include "skr_midimon.h"
 #include "skr_helper.h"
 
 #include <algorithm>
@@ -157,6 +158,9 @@ public:
         kFeedSrc = kLabB + 10, kRecTap, kGrabTap, kLiveOn, kLiveSnap, kRecLed, kLiveLed, kFeedInfo, kRecInfo, kFeedMeter,
         // ---- 2.4.1 ----
         kSubFolders,
+        // ---- 2.5: MIDI monitor / controller test / platter follow ----
+        kMidiMon, kMidiNext, kMidiPrev, kMidiStep, kMidiT1, kMidiT2, kMidiT3, kMidiL1, kMidiStat = kMidiL1 + 8, kMidiFile,
+        kPlatFollow, kPlatInfo, kPlatRpm, kPlatSpeed,
         kNumParams
     };
 
@@ -169,7 +173,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2410;
+        i.version = 2500;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -351,6 +355,18 @@ public:
         text("recinfo", "Rec Info");
         addParam(fixed(floatParam("feedmeter", "Feed Meter", 0.0f, 1.0f, 0.0f, "", 2)));
         addParam(boolParam("subdirs", "Sub Folders", true));    // browser: also every sound in the folders below
+        // ---- 2.5 ----
+        addParam(fixed(boolParam("midimon", "Midi Monitor", false)));
+        addParam(fixed(boolParam("midinext", "Midi Next", false)));
+        addParam(fixed(boolParam("midiprev", "Midi Prev", false)));
+        addParam(fixed(intParam("midistep", "Midi Step", 0, kNumTestSteps - 1, 0)));
+        text("midit1", "Test Line 1"); text("midit2", "Test Line 2"); text("midit3", "Test Line 3");
+        for (int i = 0; i < 8; ++i) { const std::string id = "midil" + std::to_string(i + 1); text(id.c_str(), ("Midi Line " + std::to_string(i + 1)).c_str()); }
+        text("midistat", "Midi Stats"); text("midifile", "Midi File");
+        addParam(fixed(boolParam("platfollow", "Platter Follow", false)));
+        text("platinfo", "Platter Info");
+        addParam(choiceParam("platrpm", "Platter RPM", {"33 1/3", "45"}, 0));
+        text("platspeed", "Platter Speed");
         if (numParams() != kNumParams) mpc::log("SKRATCHA: parameter count mismatch %d %d", numParams(), (int)kNumParams);
 
         deckP_[0] = {kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kFader, kReverse, kLoop, kAngle, kCutLed, kStrobe, kASlot, kAStyle, kAVol, kAName, kANames};
@@ -394,6 +410,7 @@ public:
         for (skrfeed::Shared*& r : feedRetired_) { skrfeed::unmapChannel(r); r = nullptr; }
         delete liveRec_;
         delete recJob_;
+        if (logFp_ != nullptr) { std::fflush(logFp_); std::fclose(logFp_); logFp_ = nullptr; }
     }
 
     // ---------------------------------------------------------------------------------------------------------
@@ -460,6 +477,13 @@ public:
         swapIn();
         syncMirrors(false);
         liveBlock(ctx.numFrames);
+        midiMonOn_ = getBool(kMidiMon);
+        {
+            const bool f = getBool(kPlatFollow) && platDec_.kind.load() != skr::PlatterDecoder::kNone;
+            if (!f && platFollowOn_) for (Deck& X : deck_) if (X.handActive && handSrc_ == kSrcJog) letGo(X);
+            if (f && !platFollowOn_) { platLast_[0] = platLast_[1] = -1; }
+            platFollowOn_ = f;
+        }
         // hidden layout button (the round target light) and the screen CUE / SET CUE keys: every tap flips them
         if (getNormalised(kLayoutTap) != lastLayoutTap_)
         {
@@ -494,6 +518,10 @@ public:
             const mpc::MidiEvent& ev = ctx.midi[e];
             if (ev.sampleOffset > pos) { render(ctx, pos, ev.sampleOffset); pos = ev.sampleOffset; }
             eventClock_ = blockClock_ + ev.sampleOffset;
+            { skr::MidiRec r; r.clock = (uint64_t)eventClock_; r.n = ev.size; r.b[0] = ev.data[0]; r.b[1] = ev.data[1]; r.b[2] = ev.data[2]; midiRing_.push(r); }
+            if (platterEvent(ev)) continue;
+            if (platFollowOn_ && ctrlKnown(ev)) continue;        // other controller messages (heartbeat, keys) do not trigger pads
+            if (midiMonOn_ && !platFollowOn_) continue;          // while the test runs, the controller does not play the decks
             handleMidi(ev);
         }
         render(ctx, pos, ctx.numFrames);
@@ -591,6 +619,12 @@ public:
 
         std::lock_guard<std::mutex> lk(textMutex_);
         if (index == kFeedInfo) { out = feedInfo_; return true; }
+        if (index >= kMidiT1 && index <= kMidiT3) { out = midiTxt_[index - kMidiT1]; return true; }
+        if (index >= kMidiL1 && index < kMidiL1 + 8) { out = midiLines_[index - kMidiL1]; return true; }
+        if (index == kMidiStat) { out = midiStat_; return true; }
+        if (index == kMidiFile) { out = midiFile_; return true; }
+        if (index == kPlatInfo) { out = platInfo_; return true; }
+        if (index == kPlatSpeed) { out = platSpeed_; return true; }
         if (index == kRecInfo) { out = recInfo_; return true; }
         if (index == kAName || index == kBName)
         {
@@ -1214,7 +1248,8 @@ private:
         {
             idleSamples_ += frames;
             const bool timeoutSource = handSrc_ != kSrcPitchBend || timeoutRelease_;
-            if (timeoutSource && idleSamples_ > (int)(0.120 * sr_)) letGo(D);
+            if (platFollowOn_ && handSrc_ == kSrcJog) { /* the real platter is the motor: the record stays where it is */ }
+            else if (timeoutSource && idleSamples_ > (int)(0.120 * sr_)) letGo(D);
             // AUTO: the MPC strip does not always send the centre when the finger leaves; a finger that stops
             // sending for 55 ms has left the strip (moving fingers report every few ms)
             else if (handSrc_ == kSrcPitchBend && releaseMode_ == 2 && idleSamples_ > (int)(0.055 * sr_)) letGo(D);
@@ -1315,6 +1350,69 @@ private:
         const double glide = (dt > 0.0 && dt < 0.025 * sr_) ? std::max(1.0, eventInterval_) : 1.0;
         D.interpLeft = (int)std::lround(glide);
         D.interpStep = (D.rawTarget - D.handTarget) / (double)D.interpLeft;
+    }
+
+    // every message key the controller sent during the test (status byte incl. channel x number)
+    std::atomic<uint32_t> ctrlSeen_[1024] = {};
+    bool ctrlKnown(const mpc::MidiEvent& ev) const
+    {
+        const int st = ev.data[0], n = ev.isPitchBend() || ev.status() == 0xD0 ? 0 : (ev.data[1] & 0x7F);
+        const int bit = ((st & 0x7F) << 7 | n) & 32767;
+        const int stn = st == 0x80 + (st & 15) ? 0x90 + (st & 15) : st;     // a note off counts as its note
+        const int bit2 = ((stn & 0x7F) << 7 | n) & 32767;
+        return ((ctrlSeen_[bit >> 5].load(std::memory_order_relaxed) >> (bit & 31)) & 1u) ||
+               ((ctrlSeen_[bit2 >> 5].load(std::memory_order_relaxed) >> (bit2 & 31)) & 1u);
+    }
+
+    // the learned platter: every message is a step of the real record -> the deck follows it exactly
+    bool platterEvent(const mpc::MidiEvent& ev)
+    {
+        if (!platFollowOn_) return false;
+        const int kind = platDec_.kind.load(std::memory_order_relaxed);
+        if (kind == skr::PlatterDecoder::kNone) return false;
+        const int st = ev.status(), ch = ev.channel(), base = platDec_.baseCh.load(std::memory_order_relaxed);
+        if (st != platDec_.status.load(std::memory_order_relaxed) || (ch != base && ch != base + 1)) return false;
+        const int d1 = platDec_.d1.load(std::memory_order_relaxed);
+        const int layer = ch - base;
+        double counts = 0.0;
+        if (kind == skr::PlatterDecoder::kAbs14Pb)
+        {
+            const int v = ev.pitchBend() + 8192;
+            if (platLast_[layer] >= 0) { int d = v - platLast_[layer]; if (d > 8192) d -= 16384; else if (d < -8192) d += 16384; counts = d; }
+            platLast_[layer] = v;
+        }
+        else
+        {
+            if (ev.data[1] != d1 && !(kind == skr::PlatterDecoder::kAbs14Cc && ev.data[1] == d1 + 32)) return false;
+            const int v = ev.data[2];
+            if (kind == skr::PlatterDecoder::kRel64) counts = v - 64;
+            else if (kind == skr::PlatterDecoder::kRel2c) counts = v < 64 ? v : v - 128;
+            else if (kind == skr::PlatterDecoder::kAbs7)
+            {
+                if (platLast_[layer] >= 0) { int d = v - platLast_[layer]; if (d > 64) d -= 128; else if (d < -64) d += 128; counts = d; }
+                platLast_[layer] = v;
+            }
+            else   // 14 bit from MSB + LSB: act on the LSB (sent second)
+            {
+                if (ev.data[1] == d1) { platMsb_[layer] = v; return true; }
+                const int full = platMsb_[layer] * 128 + v;
+                if (platLast_[layer] >= 0) { int d = full - platLast_[layer]; if (d > 8192) d -= 16384; else if (d < -8192) d += 16384; counts = d; }
+                platLast_[layer] = full;
+            }
+        }
+        if (layer != activeDeck_) { setFromAudio(kDeck, (float)layer); return true; }   // layer switched on the SC6000M
+        const double turns = counts * (double)platDec_.turnsPerCount.load(std::memory_order_relaxed);
+        platTurns_.store(platTurns_.load(std::memory_order_relaxed) + turns, std::memory_order_relaxed);
+        // the real platter's speed is the reference: 1 turn at 33 1/3 (or 45) = exactly the record at normal speed,
+        // whatever turntable is chosen in the plugin
+        Deck& D = deck_[activeDeck_];
+        const Record* rec = recOf(D);
+        const double platRpm = getInt(kPlatRpm) == 1 ? 45.0 : 100.0 / 3.0;
+        const double samples = turns * 60.0 / platRpm * (rec != nullptr ? rec->sampleRate : sr_);
+        const double deckTurns = D.samplesPerRev > 1.0 ? samples / D.samplesPerRev : 0.0;
+        if (turns != 0.0) jogEvent(deckTurns);
+        else idleSamples_ = 0;      // a held, still platter: keep holding the record
+        return true;
     }
 
     void handleMidi(const mpc::MidiEvent& ev)
@@ -1486,6 +1584,9 @@ private:
             float ol = mpc::dsp::sanitize(outL * levelGain_), orr = mpc::dsp::sanitize(outR * levelGain_);
             if (std::fabs(ol) < 1e-20f) ol = 0.0f;
             if (std::fabs(orr) < 1e-20f) orr = 0.0f;
+            // DC blocker (3 Hz): a record held still at a crest must not leave a constant offset on the output
+            { const float yl = ol - dcXl_ + 0.9996f * dcYl_; dcXl_ = ol; dcYl_ = yl; ol = yl;
+              const float yr = orr - dcXr_ + 0.9996f * dcYr_; dcXr_ = orr; dcYr_ = yr; orr = yr; }
             ol = safetyClip(ol); orr = safetyClip(orr);   // never over 0 dBFS, transparent below -1 dBFS
             if (retOn_)
             {
@@ -1933,6 +2034,7 @@ private:
             for (int d = 0; d < 2; ++d) for (int s = 0; s < kSlots; ++s) delete retired_[d][s].exchange(nullptr);
             delete previewRetired_.exchange(nullptr);
             loadWantedSlots(false);
+            logService();
             RecJob* job = nullptr;
             { std::lock_guard<std::mutex> lk(recJobMutex_); job = recJob_; recJob_ = nullptr; }
             if (job != nullptr) { finishRecording(*job); delete job; }
@@ -1948,6 +2050,297 @@ private:
             }
             else previewPath.clear();
             previewWasOn = pv;
+        }
+    }
+
+    // ---- 2.5: MIDI monitor and the guided controller test (reporter thread) ----
+    struct MonState
+    {
+        bool on = false;
+        int step = 0, ticksInStep = 0;
+        float lastNext = 0.0f, lastPrev = 0.0f;
+        uint64_t total = 0, secCount = 0, perSec = 0, t0 = 0;
+        int secTick = 0;
+        std::vector<skr::KeyStat> stats;          // this step
+        std::vector<int> lastMsb;                 // per channel * 32 controllers
+        std::vector<int> lastFull;
+        uint64_t keyFirst = 0, keyLast = 0;
+        std::string lines[8];
+        bool linesDirty = false;
+        double lastTurns = 0.0;
+        std::chrono::steady_clock::time_point lastSpeedT = std::chrono::steady_clock::now();
+    } mon_;
+
+    void logAppend(const std::string& s)
+    {
+        std::lock_guard<std::mutex> lk(logMutex_);
+        if (logPending_.size() < (8u << 20)) logPending_ += s;
+    }
+
+    static std::string hex2(int v) { char b[4]; std::snprintf(b, sizeof(b), "%02X", v & 0xFF); return b; }
+
+    skr::KeyStat& statOf(int key)
+    {
+        for (skr::KeyStat& k : mon_.stats) if (k.key == key) return k;
+        mon_.stats.emplace_back(); mon_.stats.back().key = key;
+        return mon_.stats.back();
+    }
+
+    void stepSummary()
+    {
+        std::vector<const skr::KeyStat*> v;
+        for (const skr::KeyStat& k : mon_.stats) v.push_back(&k);
+        std::sort(v.begin(), v.end(), [](const skr::KeyStat* a, const skr::KeyStat* b) { return a->count > b->count; });
+        std::string out = "### ZUSAMMENFASSUNG SCHRITT " + std::to_string(mon_.step) + "  (" + std::to_string(mon_.ticksInStep * 15 / 1000) + " s)\n";
+        for (size_t i = 0; i < v.size() && i < 40; ++i)
+        {
+            const skr::KeyStat& k = *v[i];
+            int lo = 127, hi = 0, distinct = 0;
+            for (int x = 0; x < 128; ++x) if (k.hist[x]) { lo = std::min(lo, x); hi = std::max(hi, x); ++distinct; }
+            const int st = (k.key >> 8) & 0xFF, d1 = k.key & 0x7F;
+            char b[200];
+            std::snprintf(b, sizeof(b), "###   %02X %02X  CH%-2d %-9s %3d  ANZAHL %6d  WERTE %3d..%3d (%3d VERSCHIEDEN)  REL64 %lld  REL2C %lld  ABS %lld  PB %lld\n",
+                          st, d1, (st & 15) + 1, skr::midiTypeName((uint8_t)st), d1, k.count, lo, hi, distinct, k.rel64, k.rel2c, k.absWrap, k.pbWrap);
+            out += b;
+        }
+        logAppend(out);
+    }
+
+    // learn the platter from a step where it turned a known amount
+    bool learnPlatter(double expectedTurns, bool perSecond)
+    {
+        const skr::KeyStat* best = nullptr;
+        for (const skr::KeyStat& k : mon_.stats)
+        {
+            const int type = (k.key >> 8) & 0xF0;
+            if (type != 0xB0 && type != 0xE0 && type != 0x90) continue;
+            if (k.changes < 15 || k.count < 20) continue;
+            if (best == nullptr || k.count > best->count) best = &k;
+        }
+        if (best == nullptr) { platInfo_ = "TELLER: KEINE DREH-DATEN"; bump(kPlatInfo); logAppend("### TELLER: keine passenden Daten gefunden\n"); return false; }
+        const int st = (best->key >> 8) & 0xFF, type = st & 0xF0, d1 = best->key & 0x7F;
+        int kind;
+        long long counts;
+        if (type == 0xE0) { kind = skr::PlatterDecoder::kAbs14Pb; counts = best->pbWrap; }
+        else
+        {
+            int nearMid = 0, nearEdge = 0;
+            for (int x = 0; x < 128; ++x) { if (std::abs(x - 64) <= 16) nearMid += best->hist[x]; if ((x >= 1 && x <= 31) || x >= 97) nearEdge += best->hist[x]; }
+            const skr::KeyStat* lsb = nullptr;
+            if (type == 0xB0 && d1 < 32) for (const skr::KeyStat& k : mon_.stats) if (k.key == ((st << 8) | (d1 + 32)) && k.count * 2 > best->count) lsb = &k;
+            if (lsb != nullptr) { kind = skr::PlatterDecoder::kAbs14Cc; counts = lsb->pbWrap; }
+            else if (nearMid > best->count * 0.9) { kind = skr::PlatterDecoder::kRel64; counts = best->rel64; }
+            else if (nearEdge > best->count * 0.9) { kind = skr::PlatterDecoder::kRel2c; counts = best->rel2c; }
+            else { kind = skr::PlatterDecoder::kAbs7; counts = best->absWrap; }
+        }
+        double turns = expectedTurns;
+        if (perSecond)
+        {
+            const double secs = (double)(mon_.keyLast - mon_.keyFirst) / sr_;
+            turns = expectedTurns * std::max(0.5, secs);
+        }
+        if (std::llabs(counts) < 8) { platInfo_ = "TELLER: ZU WENIG BEWEGUNG"; bump(kPlatInfo); return false; }
+        platDec_.status.store(type); platDec_.d1.store(d1); platDec_.baseCh.store(st & 15);
+        platDec_.turnsPerCount.store((float)(turns / (double)counts));
+        platDec_.kind.store(kind);
+        static const char* kn[] = {"-", "REL", "REL2", "ABS", "PB14", "CC14"};
+        const double cpr = std::fabs((double)counts / turns);
+        platInfo_ = "ERKANNT: CH" + std::to_string((st & 15) + 1) + " " + (type == 0xE0 ? std::string("PB") : (type == 0x90 ? "N" : "CC") + std::to_string(d1)) +
+                    " " + kn[kind] + " " + std::to_string((int)std::lround(cpr)) + "/U";
+        bump(kPlatInfo);
+        logAppend("### TELLER ERKANNT: " + platInfo_ + fmt("  counts %.0f", (double)counts) + fmt("  turns %.3f", turns) + "\n");
+        return true;
+    }
+
+    void setStep(int st)
+    {
+        mon_.step = mpc::clamp(st, 0, skr::kNumTestSteps - 1);
+        mon_.ticksInStep = 0;
+        mon_.stats.clear();
+        mon_.keyFirst = mon_.keyLast = 0;
+        set(kMidiStep, (float)mon_.step);
+        if (effect_ != nullptr && host_ != nullptr) notifyHostParameterChanged(kMidiStep);
+        const skr::TestStep& t = skr::kTestSteps[mon_.step];
+        { std::lock_guard<std::mutex> lk(textMutex_); midiTxt_[0] = t.l1; midiTxt_[1] = t.l2; }
+        bump(kMidiT1); bump(kMidiT2);
+        if (mon_.on) logAppend(std::string("\n### SCHRITT ") + std::to_string(mon_.step) + ": " + t.l1 + " / " + t.l2 + "\n");
+    }
+
+    void midiReporter(int tick)
+    {
+        (void)tick;
+        const bool on = getBool(kMidiMon);
+        if (on && !mon_.on)
+        {
+            mon_ = MonState(); mon_.on = true;
+            mon_.lastNext = getNormalised(kMidiNext); mon_.lastPrev = getNormalised(kMidiPrev);
+            mon_.lastMsb.assign(16 * 32, 0); mon_.lastFull.assign(16 * 32, -1);
+            { std::lock_guard<std::mutex> lk(logMutex_); logOpenWanted_ = true; logCloseWanted_ = false; logPending_.clear(); }
+            char hdr[256];
+            const std::time_t now = std::time(nullptr);
+            std::strftime(hdr, sizeof(hdr), "SKRATCHA 2.5 MIDI-PROTOKOLL  %Y-%m-%d %H:%M:%S\n", std::localtime(&now));
+            logAppend(std::string(hdr) + "Zeit(s)      Bytes     Kanal Typ        Nr  Wert\n");
+            setStep(1);
+        }
+        else if (!on && mon_.on)
+        {
+            stepSummary();
+            logAppend("### TEST BEENDET\n");
+            mon_.on = false;
+            { std::lock_guard<std::mutex> lk(logMutex_); logCloseWanted_ = true; }
+            setStep(0);
+        }
+        if (mon_.on)
+        {
+            if (getNormalised(kMidiNext) != mon_.lastNext)
+            {
+                mon_.lastNext = getNormalised(kMidiNext);
+                stepSummary();
+                if (mon_.step == 2) learnPlatter(getInt(kPlatRpm) == 1 ? 0.75 : 33.3333 / 60.0, true);
+                if (mon_.step == 7 && platDec_.kind.load() == skr::PlatterDecoder::kNone) learnPlatter(1.0, false);
+                if (mon_.step < skr::kNumTestSteps - 1) setStep(mon_.step + 1);
+            }
+            if (getNormalised(kMidiPrev) != mon_.lastPrev) { mon_.lastPrev = getNormalised(kMidiPrev); stepSummary(); setStep(std::max(1, mon_.step - 1)); }
+            ++mon_.ticksInStep;
+        }
+        // drain the ring
+        skr::MidiRec r;
+        std::string logChunk;
+        int n = 0;
+        while (midiRing_.pop(r) && n < 4000)
+        {
+            ++n; ++mon_.total; ++mon_.secCount;
+            if (mon_.t0 == 0) mon_.t0 = r.clock + 1;
+            const int st = r.b[0], d1 = r.b[1] & 0x7F, d2 = r.b[2] & 0x7F, type = st & 0xF0, ch = st & 15;
+            char line[96];
+            if (type == 0xE0)
+                std::snprintf(line, sizeof(line), "CH%-2d PB %+5d", ch + 1, (d2 * 128 + d1) - 8192);
+            else
+                std::snprintf(line, sizeof(line), "CH%-2d %-9s %3d = %3d", ch + 1, skr::midiTypeName((uint8_t)st), d1, d2);
+            for (int i = 7; i > 0; --i) mon_.lines[i] = mon_.lines[i - 1];
+            mon_.lines[0] = hex2(st) + " " + hex2(d1) + " " + hex2(d2) + "  " + line;
+            mon_.linesDirty = true;
+            if (!mon_.on) continue;
+            char lg[128];
+            std::snprintf(lg, sizeof(lg), "%11.5f  %02X %02X %02X  %s\n", (double)(r.clock - (mon_.t0 - 1)) / sr_, st, d1, d2, line);
+            logChunk += lg;
+            {
+                const int stn = type == 0x80 ? (0x90 | ch) : st;
+                const int bit = ((stn & 0x7F) << 7 | (type == 0xE0 || type == 0xD0 ? 0 : d1)) & 32767;
+                ctrlSeen_[bit >> 5].fetch_or(1u << (bit & 31), std::memory_order_relaxed);
+            }
+            // statistics for the learner
+            skr::KeyStat& k = statOf(type == 0xE0 ? (st << 8) : ((st << 8) | d1));
+            if (k.count == 0) { if (mon_.keyFirst == 0) mon_.keyFirst = r.clock; }
+            mon_.keyLast = r.clock;
+            ++k.count;
+            const int v = type == 0xE0 ? d2 : d2;
+            if (k.last >= 0 && k.last != (type == 0xE0 ? d2 * 128 + d1 : d2)) ++k.changes;
+            k.hist[v]++;
+            k.rel64 += d2 - 64;
+            k.rel2c += d2 < 64 ? d2 : d2 - 128;
+            if (type == 0xE0)
+            {
+                const int full = d2 * 128 + d1;
+                if (k.pb >= 0) { int d = full - k.pb; if (d > 8192) d -= 16384; else if (d < -8192) d += 16384; k.pbWrap += d; }
+                k.pb = full; k.last = full;
+            }
+            else
+            {
+                if (k.last >= 0) { int d = d2 - k.last; if (d > 64) d -= 128; else if (d < -64) d += 128; k.absWrap += d; }
+                k.last = d2;
+                if (type == 0xB0 && d1 >= 32 && d1 < 64)
+                {
+                    const int full = mon_.lastMsb[(size_t)(ch * 32 + d1 - 32)] * 128 + d2;
+                    int& lf = mon_.lastFull[(size_t)(ch * 32 + d1 - 32)];
+                    // a 14-bit pair: replace the 7-bit wrap of the LSB by the full 14-bit movement
+                    if (lf >= 0) { int d = full - lf; if (d > 8192) d -= 16384; else if (d < -8192) d += 16384; k.pbWrap += d; }   // 14-bit movement
+                    lf = full;
+                }
+                if (type == 0xB0 && d1 < 32) mon_.lastMsb[(size_t)(ch * 32 + d1)] = d2;
+            }
+        }
+        if (!logChunk.empty()) logAppend(logChunk);
+        if (++mon_.secTick >= 66) { mon_.perSec = mon_.secCount; mon_.secCount = 0; mon_.secTick = 0; }
+        if (tick % 7 == 0)
+        {
+            if (mon_.linesDirty)
+            {
+                { std::lock_guard<std::mutex> lk(textMutex_); for (int i = 0; i < 8; ++i) midiLines_[i] = mon_.lines[i]; }
+                for (int i = 0; i < 8; ++i) bump(kMidiL1 + i);
+                mon_.linesDirty = false;
+            }
+            std::string stat = "MSG " + std::to_string(mon_.total) + "  " + std::to_string(mon_.perSec) + "/S";
+            if (midiRing_.dropped() > 0) stat += "  VOLL " + std::to_string(midiRing_.dropped());
+            std::string t3;
+            if (mon_.on)
+            {
+                const float secs = skr::kTestSteps[mon_.step].seconds;
+                const float el = (float)mon_.ticksInStep * 0.015f;
+                if (mon_.step == skr::kNumTestSteps - 1) t3 = "TEST BEENDEN: TEST STARTEN AUS";
+                else if (secs > 0.0f && el < secs) t3 = fmt("NOCH %.0f S, DANN WEITER", (double)(secs - el));
+                else t3 = "JETZT  WEITER  TIPPEN";
+            }
+            else t3 = "";
+            bool chg;
+            { std::lock_guard<std::mutex> lk(textMutex_); chg = midiStat_ != stat || midiTxt_[2] != t3; midiStat_ = stat; midiTxt_[2] = t3; }
+            if (chg) { bump(kMidiStat); bump(kMidiT3); }
+        }
+        // live speed of the real platter (when it is followed)
+        if (tick % 20 == 0)
+        {
+            const auto now = std::chrono::steady_clock::now();
+            const double dt = std::chrono::duration<double>(now - mon_.lastSpeedT).count();
+            const double t = platTurns_.load();
+            std::string sp;
+            if (platFollowOn_) sp = fmt("TELLER %.1f U/MIN", (t - mon_.lastTurns) / std::max(0.01, dt) * 60.0);
+            else if (getBool(kPlatFollow)) sp = "ERST DEN TEST MACHEN";
+            mon_.lastTurns = t; mon_.lastSpeedT = now;
+            bool chg;
+            { std::lock_guard<std::mutex> lk(textMutex_); chg = platSpeed_ != sp; platSpeed_ = sp; }
+            if (chg) bump(kPlatSpeed);
+        }
+    }
+
+    // loader thread: the log file in  <plugin folder>/SKRATCHA MIDI LOG/
+    void logService()
+    {
+        std::string chunk;
+        bool open, close;
+        { std::lock_guard<std::mutex> lk(logMutex_); chunk.swap(logPending_); open = logOpenWanted_; close = logCloseWanted_; logOpenWanted_ = false; logCloseWanted_ = false; }
+        if (open)
+        {
+            if (logFp_ != nullptr) { std::fclose(logFp_); logFp_ = nullptr; }
+            std::string shown = "NICHT GESPEICHERT (LAUFWERK?)";
+#if !defined(_WIN32)
+            const std::string pf = mpc::pluginFolder();
+            if (!pf.empty())
+            {
+                const std::string dir = pf + "/SKRATCHA MIDI LOG";
+                mkdir(dir.c_str(), 0775);
+                char nm[64];
+                const std::time_t now = std::time(nullptr);
+                std::strftime(nm, sizeof(nm), "MIDI %Y-%m-%d %H%M%S.txt", std::localtime(&now));
+                logFp_ = std::fopen((dir + "/" + nm).c_str(), "w");
+                if (logFp_ != nullptr) shown = std::string("LOG: ") + nm;
+            }
+#endif
+            logBytes_ = 0;
+            setText(midiFile_, shown, kMidiFile);
+        }
+        if (logFp_ != nullptr && !chunk.empty() && logBytes_ < (60u << 20))
+        {
+            std::fwrite(chunk.data(), 1, chunk.size(), logFp_);
+            logBytes_ += chunk.size();
+            std::fflush(logFp_);
+        }
+        if (close && logFp_ != nullptr)
+        {
+#if !defined(_WIN32)
+            fsync(fileno(logFp_));
+#endif
+            std::fclose(logFp_); logFp_ = nullptr;
+            setText(midiFile_, midiFile_ + " OK", kMidiFile);
         }
     }
 
@@ -2412,6 +2805,7 @@ private:
 
             // ---- 2.4 LIVE: link to SKRATCHA FEED, REC / GRAB, status ----
             liveReporter(tick, lastRecTap, lastGrabSeen, lastLiveLed, lastRecLed, lastMeter, feedStale);
+            midiReporter(tick);
             designReporter(dip, shown, lastLab, dipPhase, (tick & 1) == 0, getInt(kLayout));
 
             // a new lesson starts at its own tempo
@@ -2559,6 +2953,19 @@ private:
     std::atomic<bool> previewDone_{false};
     // records and threads
     std::atomic<Record*> pending_[2][kSlots] = {};    // worker -> audio
+    // ---- 2.5 MIDI monitor / platter ----
+    skr::MidiRing midiRing_;
+    skr::PlatterDecoder platDec_;
+    bool midiMonOn_ = false, platFollowOn_ = false;
+    float dcXl_ = 0.0f, dcYl_ = 0.0f, dcXr_ = 0.0f, dcYr_ = 0.0f;
+    int platLast_[2] = {-1, -1}, platMsb_[2] = {0, 0};
+    std::atomic<double> platTurns_{0.0};
+    std::string midiTxt_[3], midiLines_[8], midiStat_, midiFile_ = "-", platInfo_ = "TELLER: NOCH NICHT ERKANNT", platSpeed_ = "";
+    std::mutex logMutex_;
+    std::string logPending_;
+    bool logOpenWanted_ = false, logCloseWanted_ = false;
+    FILE* logFp_ = nullptr;
+    size_t logBytes_ = 0;
     // ---- 2.4 LIVE / RESAMPLE ----
     static constexpr uint32_t kLiveN = 1u << 19;       // live ring: 11.9 s at 44.1 kHz (power of two)
     std::atomic<skrfeed::Shared*> feed_{nullptr};      // mapped by the reporter, read by the audio thread
