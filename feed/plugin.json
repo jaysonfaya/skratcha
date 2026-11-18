@@ -1,0 +1,17 @@
+{
+  "name": "SKRATCHA FEED",
+  "manufacturer": "JJ DA PLUG",
+  "version": "1.0.0",
+  "format": "vst2",
+  "kind": "effect",
+  "uid": "JJsF",
+  "numInputs": 2,
+  "numOutputs": 2,
+  "category": "Utility",
+  "file32": "VST/skratcha-feed-arm32.so",
+  "file64": "VST/skratcha-feed-arm64.so",
+  "description": "SKRATCHA FEED: put it as an insert on any track or the master to record or live-scratch that audio in SKRATCHA. Pass-through when SKRATCHA is not live. By JJ DA PLUG.",
+  "author": "JJ DA PLUG",
+  "url": "",
+  "license": "MIT"
+}

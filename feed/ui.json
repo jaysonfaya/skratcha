@@ -1,0 +1,14 @@
+{
+  "pages": [
+    {
+      "name": "FEED",
+      "controls": [
+        "Channel",
+        "Live Mode",
+        "Feed Level",
+        "Status"
+      ]
+    }
+  ],
+  "style": { "background": "ff121214", "accent": "ffffb52e", "text": "ffffffff", "muted": "ff6a6a6c" }
+}

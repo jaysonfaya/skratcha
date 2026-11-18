@@ -1,18 +1,18 @@
-# SKRATCHA 2.3 – zwei Scratch-Plattenspieler für die MPC
+# SKRATCHA 2.4 – zwei Scratch-Plattenspieler für die MPC
 
 Von **JJ DA PLUG**. Instrument-Plugin für die MPC Live III / XL (arm64) und die MPC Live / Live II / One (arm32), gebaut mit dem offiziellen MPC Plugin SDK.
 
 SKRATCHA hat zwei Decks mit je acht Sample-Slots und einen Battle-Crossfader. Gescratcht wird mit dem Touch Strip. Dazu gibt es drei Plattenspieler-Stile und einen Scratch-Lehrer.
 
 ## Installation
-1. Den Ordner `JJ DA PLUG - VST - SKRATCHA` in den Ordner `VST2 Plugins` auf einem Laufwerk kopieren (USB, SD oder SSD).
+1. Die Ordner `JJ DA PLUG - VST - SKRATCHA` und `JJ DA PLUG - VST - SKRATCHA FEED` in den Ordner `VST2 Plugins` auf einem Laufwerk kopieren (USB, SD oder SSD). FEED brauchst du nur für LIVE / REC.
 2. Voraussetzungen an der MPC:
    - MPC OS 3.10.1 oder neuer.
    - Preferences → Enhancements (Beta) → **Enable Enhancements** und **External Plugin Support** einschalten.
 3. Einen Plugin-Track anlegen und SKRATCHA (JJ DA PLUG) wählen.
 4. Den Touch Strip auf **PITCH BEND** stellen (SHIFT + Touch Strip).
 
-**Zurück:** Den Ordner wieder löschen. Am System wird nichts verändert.
+**Zurück:** Die Ordner wieder löschen. Am System wird nichts verändert.
 
 ## Bedienung
 ### Die Pads = der Bildschirm (4 × 4)
@@ -57,6 +57,9 @@ SKRATCHA hat zwei Decks mit je acht Sample-Slots und einen Battle-Crossfader. Ge
 - **ADVANCED:** Ein oranger Rahmen um die Profi-Knöpfe (SMOOTH, CATCH, CUT LAG, CRACKLE) zeigt, dass es an ist. Dazu kommt ein Feld neben der ANSICHT-Taste mit HAMSTER, WEITERLAUF, CUE SETZEN, FIRE=PLAY, DECK ON und SLIP.
 
 ## Die 10 Plattenspieler
+- **Gleich laut:** Seit 2.4 misst SKRATCHA laufend, wie laut deine Platte ohne Färbung wäre, und bringt jeden Plattenspieler genau auf diese Lautheit. Der Charakter bleibt, nur der Pegel springt beim Wechsel nicht mehr. Ein Schutz verhindert, dass der Ausgang über 0 dBFS geht.
+- **Weicher Wechsel:** Beim Wechsel wird das Bild kurz abgedunkelt (etwa 30 ms), Plattenspieler und Label wechseln im dunkelsten Moment, dann hellt es wieder auf (etwa 100 ms). Es blitzt kein anderes Design mehr durch.
+
 Jeder Plattenspieler hat eine eigene Platte und ein eigenes Label, immer mit dem JF-Logo in passender Farbe. Dazu einen eigenen Klang und ein eigenes Gefühl.
 
 | Plattenspieler | Look / Platte | Klang | Gefühl |
@@ -86,11 +89,34 @@ Rechts liegen die Schalter per Touch: Slip, Hamster, Strip Invert, Pad 1 = C#1, 
 
 ## BROWSER – alle Laufwerke der MPC
 - **Die erste Ebene:** alle Laufwerke, das sind SKRATCHA SAMPLES, My Samples, jedes Laufwerk unter /media, /mnt usw., die interne SSD, die SD-Karte und MPC Content. Dazu **SYSTEM – ALLES (/)**, das ganze Dateisystem.
-- **Ordner:** Tippen wählt den Ordner aus, rechts erscheinen seine WAVs. **Zweimal tippen** (oder ÖFFNEN) geht hinein, **[..] ZURÜCK** oder ZURÜCK geht eine Ebene hoch. Oben steht der Pfad.
-- **Datei:** Tippen spielt sie mit AUTO-HÖREN an. **Zweimal tippen** (oder LADEN) legt sie in den aktuellen Slot des aktiven Decks.
-- **Laden in einen bestimmten Slot:** Auf einen der 8 Slots rechts tippen.
-- **Blättern:** **Wische direkt auf der Liste** nach oben oder unten, so wie am Handy. Der orange Schieber daneben springt grob durch lange Listen. Die Pfeile gehen eine Zeile oder eine Seite weiter. Q-Link 1 und 2 wählen Ordner und Datei.
-- Jedes Tippen auf eine Zeile wählt sie aus, auch wenn sie schon gewählt war. Deshalb reagiert jetzt auch der zweite Tipp immer.
+- **Blättern:** Finger auf die Liste legen und nach oben oder unten wischen. Wie schnell das geht, stellst du rechts unten bei **WISCH-TEMPO** ein (LANGSAM / NORMAL / SCHNELL). Der orange Schieber, die Pfeile und Q-Link 1 und 2 gehen weiterhin.
+- **Ordner öffnen:** Auf den Pfeil **▶** am Ende der Zeile tippen oder doppelt auf den Namen tippen. **[..] ZURÜCK** oder ZURÜCK geht eine Ebene hoch. Rechts stehen die WAVs des geöffneten Ordners.
+- **Sample laden:** Auf das **+** am Ende der Zeile tippen oder doppelt auf den Namen tippen. Das Sample liegt dann im aktuellen Slot (Pad) des aktiven Decks.
+- **In einen bestimmten Slot:** Sample wählen, dann auf einen der 8 Slots rechts tippen.
+
+## LIVE – aufnehmen und live scratchen (neu in 2.4)
+Dafür gibt es das zweite Plugin **SKRATCHA FEED**. Es kommt als Insert auf die Spur, die du scratchen willst: einen Drum-Track, einen Sample-Track, den Master oder eine Audio-Spur mit dem Eingang.
+
+**Einrichten (einmal):**
+1. Auf der Spur, die du scratchen willst: Insert-FX-Slot → **SKRATCHA FEED** (JJ DA PLUG).
+2. Im FEED **Channel = FEED 1** lassen. Hast du mehrere Quellen, nimm FEED 2–4.
+3. In SKRATCHA → Reiter **LIVE** → **QUELLE = FEED 1**. Oben steht dann „FEED 1: OK“.
+
+**Aufnehmen (Resample):**
+- **REC** tippen: Die Aufnahme startet. Nochmal **REC**: Sie stoppt (höchstens 15 s). Der rote Ring leuchtet, solange aufgenommen wird.
+- **LETZTE 2 S / 4 S / 8 S:** Holt sofort die letzten Sekunden. Der FEED merkt sich immer die letzten etwa 11 s.
+- Die Aufnahme landet im **aktuellen Slot des aktiven Decks** und liegt sofort auf dem Teller.
+- Gespeichert wird sie als WAV in `My Samples/SKRATCHA REC` im Plugin-Ordner. So kennt das Projekt sie auch nach dem Neuladen. Ist das Laufwerk schreibgeschützt, bleibt sie nur im Speicher.
+
+**Live scratchen:**
+- **LIVE SCRATCH** tippen: Das aktive Deck spielt jetzt die Spur selbst, wie eine Platte. Der Touch Strip scratcht sie.
+- Mit **Live Mode = REPLACE** im FEED (Standard) spielt die Spur während LIVE die gescratchte Version. Das passt zu einem DJ mit Platte. Der Crossfader und CUT gelten auch für die Spur.
+- **NACH DEM LOSLASSEN:**
+  - **SOFORT ZURÜCK** (Standard): Die Spur ist sofort wieder genau im Beat.
+  - **BLEIBT HINTEN:** Die Platte läuft dort weiter, wo du sie losgelassen hast, wie bei einem echten Plattenspieler.
+- LIVE nochmal tippen: Das Deck spielt wieder seinen Slot, die Spur läuft normal.
+- **Latenz:** Während LIVE kommt die Spur etwa 14 ms später, bei 128er-Audioblöcken. Bei größeren Blöcken der MPC ist es entsprechend mehr.
+- **Master:** FEED geht auch auf den Master. SKRATCHA schickt das live gescratchte Deck dann nur über den FEED zurück, nicht zusätzlich über die eigene Spur. So entsteht keine Rückkopplung.
 
 ## LERNEN
 - **0 GRUNDLAGEN:** Tippe ÜBEN. In 10 Schritten lernst du START, STOP, Sample wählen, Strip berühren, scratchen, loslassen, CUT, Crossfader, Deck B und zurück zu Deck A.
@@ -120,6 +146,11 @@ Im Plugin-Ordner unter `Plugin Skins/browser_images/` liegen zwei Bilder, nach A
 Ob die MPC diese Bilder auch bei externen VST-Plugins anzeigt, ist noch nicht bestätigt.
 
 ## Technik (ehrlich)
+- **Neu in 2.4:**
+  - Lautheit pro Deck: gewichtete Leistung vor und nach der Era-Färbung (250 ms). Daraus wird eine Ausgleichs-Verstärkung (0,3–2,8×, 40 ms Gleiten), danach ein Sicherheits-Begrenzer ab −1 dBFS. Am PC gemessen liegen die 10 Plattenspieler mit Sprache innerhalb 0,5 dB, mit Break und Vocal innerhalb etwa 1,4 dB.
+  - Designwechsel: alle Decks in einem Filmstreifen, die Labels sind immer da (Bild 0 leer). Nichts wird mehr ein- oder ausgeblendet.
+  - Browser: Die Zeilen sind gleich gebaut wie der Schieber, der auf der MPC funktioniert. Wischen schiebt die Liste; Doppeltipp und der Zeilen-Pfeil öffnen bzw. laden.
+  - LIVE: Ein Ring im geteilten Speicher, aus dem SKRATCHA laufend die Mip-Stufen baut. Am PC mit beiden Plugins getestet: Pegel gleich, keine Knackser, Scratch und Zurückspringen funktionieren, die Latenz liegt bei 13,9 ms, REC und GRAB liefern WAVs der richtigen Länge.
 - **Neu in 2.3 – Timing:**
   - **Loslassen = AUTO** (neuer Standard). Die Platte läuft weiter, sobald der Strip in die Mitte springt **oder** dein Finger 55 ms lang keine Bewegung mehr meldet. Vorher wartete das Plugin bis zu 1 s, weil der MPC-Strip beim Loslassen nicht immer die Mitte sendet.
   - Am PC gemessen: Vom Loslassen bis zum vollen Tempo dauert es jetzt etwa 55 ms, ohne Mitte-Signal etwa 100 ms. In 2.2 war es bis zu 1 s.

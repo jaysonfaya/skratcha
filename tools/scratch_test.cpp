@@ -70,6 +70,7 @@ int main(int argc, char** argv)
     if (scen.rfind("tone", 0) == 0) sampleIndex = 4;
     if (scen == "demo") { sampleIndex = 1; seconds = 10.0; }
     if (scen == "tone_extreme") { setp(kStripRange, 1.0f); }
+    if (const char* sl = std::getenv("SKR_SLOT")) sampleIndex = std::atoi(sl);
     if (scen == "fast") seconds = 3.0;
     if (probe) sampleIndex = 8;   // SKRATCHA_TEST_SLOT8 = the probe record
     setp(kFireMode, 0.0f);
@@ -77,6 +78,7 @@ int main(int argc, char** argv)
     if (scen.find("slip") != std::string::npos) setp(kSlip, 1.0f);                                   // pads only cue (the scenarios start the motor with pad 9)
     setp(kASlot, (float)(std::min(sampleIndex, 8) - 1) / 7.0f);
     setp(kLoop, 1.0f);
+    if (const char* st = std::getenv("SKR_STYLE")) setp(35, (float)std::atoi(st) / 9.0f);
     if (scen == "lesson_demo") { setp(kHLesson, 1.0f / 6.0f); setp(kHDemo, 1.0f); seconds = 8.0; }
     const bool practice = scen.rfind("practice", 0) == 0;   // practice_good | practice_wrong | practice_none
     if (practice) { setp(kHLesson, scen.find("forward") != std::string::npos ? 3.0f / 6.0f : 1.0f / 6.0f); setp(kHRun, 1.0f); seconds = 3.0 + 12.0 + 0.5; }
@@ -107,6 +109,7 @@ int main(int argc, char** argv)
 
     if (scen == "baby" || scen == "tone_baby" || scen == "autorun") gesture(0.3, 3.3, 1.5, 0.35, -0.5);
     else if (scen == "fast" || scen == "tone_fast" || scen == "tone_extreme") gesture(0.2, 2.7, 6.0, 0.45, -0.6);
+    else if (scen == "playloud") { note(0, 47, true); note(100, 47, false); }
     else if (scen == "rel_center" || scen == "rel_hold")
     {
         note(0, 47, true); note(100, 47, false);                 // motor on

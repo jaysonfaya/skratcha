@@ -44,6 +44,7 @@
 #include "dsp/math.h"
 
 #include "skr_record.h"
+#include "skr_feed.h"
 #include "skr_helper.h"
 
 #include <algorithm>
@@ -56,6 +57,8 @@
   #include <unistd.h>
 #endif
 #include <cstring>
+#include <ctime>
+#include <cstdio>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -113,7 +116,8 @@ const Style kStyles[kNumStyles] = {
 };
 
 // rough loudness match so switching eras does not jump in volume
-const float kStyleGain[kNumStyles] = {1.7f, 1.3f, 0.75f, 1.6f, 0.9f, 1.0f, 0.85f, 0.85f, 1.0f, 0.75f};
+// 2.4: every era is brought to the loudness of the dry record by the auto gain in readDeck(); the table stays at 1
+const float kStyleGain[kNumStyles] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
 std::string fmt(const char* f, double v) { char b[48]; std::snprintf(b, sizeof(b), f, v); return b; }
 
@@ -147,9 +151,14 @@ public:
         kBrPath, kHint, kSync, kDesignName, kPadCutA, kPadCutB, kAFix,
         // ---- 2.3: browser rows by touch: tap = select, swipe = scroll ----
         kDTap = kAFix + 4, kFTap = kDTap + 7, kFolderScroll = kFTap + 7, kFileScroll,
+        // ---- 2.4: swipe speed, smooth design change, live resample / live scratch ----
+        kSwipeSpeed, kShownC, kShownA, kShownB, kDipC, kDipA, kDipB,
+        kLabC, kLabA = kLabC + 10, kLabB = kLabA + 10,
+        kFeedSrc = kLabB + 10, kRecTap, kGrabTap, kLiveOn, kLiveSnap, kRecLed, kLiveLed, kFeedInfo, kRecInfo, kFeedMeter,
         kNumParams
     };
 
+    struct RecJob { std::vector<float> data; int deck = 0, slot = 0; double sr = 44100.0; };
     struct DeckParams { int play, speed, pitch, prange, start, brake, chan, reverse, loop, angle, cutled, strobe, slot, style, vol, name, names; };
 
     static mpc::PluginInfo makeInfo()
@@ -158,7 +167,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2300;
+        i.version = 2400;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -314,6 +323,31 @@ public:
         for (int r = 0; r < 7; ++r) addParam(fixed(boolParam(("ftap" + std::to_string(r + 1)).c_str(), ("File Tap " + std::to_string(r + 1)).c_str(), false)));
         addParam(fixed(floatParam("dscroll", "Folder Scroll", 0.0f, 1.0f, 0.5f, "", 3)));
         addParam(fixed(floatParam("fscroll", "File Scroll", 0.0f, 1.0f, 0.5f, "", 3)));
+        // ---- 2.4 ----
+        addParam(choiceParam("swipe", "Swipe Speed", {"LANGSAM", "NORMAL", "SCHNELL"}, 1));
+        addParam(fixed(intParam("shownc", "Shown Style", 0, kNumStyles - 1, 5)));
+        addParam(fixed(intParam("showna", "Shown A Style", 0, kNumStyles - 1, 5)));
+        addParam(fixed(intParam("shownb", "Shown B Style", 0, kNumStyles - 1, 5)));
+        addParam(fixed(floatParam("dipc", "Dip", 0.0f, 1.0f, 0.0f, "", 2)));
+        addParam(fixed(floatParam("dipa", "A Dip", 0.0f, 1.0f, 0.0f, "", 2)));
+        addParam(fixed(floatParam("dipb", "B Dip", 0.0f, 1.0f, 0.0f, "", 2)));
+        for (const char* k : {"c", "a", "b"})
+            for (int i = 0; i < kNumStyles; ++i)
+            {
+                const std::string id = std::string("lab") + k + std::to_string(i);
+                const std::string nm = std::string(k[0] == 'c' ? "" : (k[0] == 'a' ? "A " : "B ")) + "Label " + std::to_string(i);
+                addParam(fixed(floatParam(id.c_str(), nm.c_str(), 0.0f, 1.0f, 0.0f, "", 3)));
+            }
+        addParam(choiceParam("feedsrc", "Feed Source", {"FEED 1", "FEED 2", "FEED 3", "FEED 4"}, 0));
+        addParam(fixed(boolParam("rectap", "Rec Tap", false)));
+        addParam(fixed(choiceParam("grab", "Grab", {"-", "2 S", "4 S", "8 S"}, 0)));
+        addParam(fixed(boolParam("liveon", "Live", false)));
+        addParam(choiceParam("livesnap", "Live Release", {"SOFORT ZURUECK", "BLEIBT HINTEN"}, 0));
+        addParam(fixed(boolParam("recled", "Rec LED", false)));
+        addParam(fixed(boolParam("liveled", "Live LED", false)));
+        text("feedinfo", "Feed Info");
+        text("recinfo", "Rec Info");
+        addParam(fixed(floatParam("feedmeter", "Feed Meter", 0.0f, 1.0f, 0.0f, "", 2)));
         if (numParams() != kNumParams) mpc::log("SKRATCHA: parameter count mismatch %d %d", numParams(), (int)kNumParams);
 
         deckP_[0] = {kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kFader, kReverse, kLoop, kAngle, kCutLed, kStrobe, kASlot, kAStyle, kAVol, kAName, kANames};
@@ -353,12 +387,33 @@ public:
                 delete retired_[d][s].exchange(nullptr);
             }
         delete preview_; delete previewPending_.exchange(nullptr); delete previewRetired_.exchange(nullptr);
+        if (skrfeed::Shared* f = feed_.exchange(nullptr)) { f->h.liveOn.store(0); skrfeed::unmapChannel(f); }
+        for (skrfeed::Shared*& r : feedRetired_) { skrfeed::unmapChannel(r); r = nullptr; }
+        delete liveRec_;
+        delete recJob_;
     }
 
     // ---------------------------------------------------------------------------------------------------------
-    void prepare(double sampleRate, int /*maxBlockSize*/) override
+    void prepare(double sampleRate, int maxBlockSize) override
     {
         sr_ = sampleRate > 1000.0 ? sampleRate : 44100.0;
+        maxBlock_ = mpc::clamp(maxBlockSize, 32, 4096);
+        liveLag_ = (double)(maxBlock_ + 96);
+        if (liveRec_ == nullptr)
+        {
+            // the LIVE record: a ring of the FEED audio with its mip levels, filled block by block
+            liveRec_ = new Record();
+            liveRec_->name = "LIVE"; liveRec_->path = ""; liveRec_->channels = 2; liveRec_->sampleRate = sr_;
+            liveRec_->length = kLiveN;
+            for (int k = 0; k < kMipLevels; ++k)
+            {
+                liveRec_->len[k] = kLiveN >> k;
+                for (int c = 0; c < 2; ++c) liveRec_->lv[k][c].assign(kLiveN >> k, 0.0f);
+            }
+        }
+        agCoef_ = (float)(1.0 - std::exp(-1.0 / (0.25 * sr_)));
+        agHpCoef_ = (float)(1.0 - std::exp(-2.0 * 3.14159265 * 500.0 / sr_));
+        agSmooth_ = (float)(1.0 - std::exp(-1.0 / (0.04 * sr_)));
         levelGain_ = mpc::dsp::dbToGain(get(kLevel));
         if (!threadStarted_)
         {
@@ -401,6 +456,7 @@ public:
     {
         swapIn();
         syncMirrors(false);
+        liveBlock(ctx.numFrames);
         // hidden layout button (the round target light) and the screen CUE / SET CUE keys: every tap flips them
         if (getNormalised(kLayoutTap) != lastLayoutTap_)
         {
@@ -439,13 +495,19 @@ public:
         }
         render(ctx, pos, ctx.numFrames);
         blockClock_ += ctx.numFrames;
+        if (skrfeed::Shared* f = liveFeed_)
+        {
+            if (retOn_) f->h.retPos.store(liveHeadU_ + (uint64_t)ctx.numFrames, std::memory_order_release);
+            if (liveDeck_ >= 0) { f->h.liveOn.store(1, std::memory_order_relaxed); f->h.skrAlive.fetch_add(1, std::memory_order_relaxed); }
+        }
+        liveLedOn_.store(liveDeck_ >= 0);
 
         // live values for the background reporter
         for (int d = 0; d < 2; ++d)
         {
             Deck& D = deck_[d];
             if (!std::isfinite(D.x)) { D.x = 0.0; D.handTarget = D.rawTarget = 0.0; D.interpLeft = 0; D.handVel = D.vel = 0.0; }
-            const Record* r = D.slot[D.cur];
+            const Record* r = recOf(D);
             liveRevs_[d].store((r != nullptr ? D.x / r->sampleRate : D.x / sr_) * kRevPerSecond33 * kStyles[D.style].rpm / 33.333);
             liveCut_[d].store(D.audible * D.cutGain > 0.3f);
             liveSlot_[d].store(D.cur);
@@ -525,6 +587,8 @@ public:
         if (index == kHGhost || index == kHBeat || index == kHStars) return false;
 
         std::lock_guard<std::mutex> lk(textMutex_);
+        if (index == kFeedInfo) { out = feedInfo_; return true; }
+        if (index == kRecInfo) { out = recInfo_; return true; }
         if (index == kAName || index == kBName)
         {
             const int d = index == kAName ? 0 : 1;
@@ -728,12 +792,17 @@ private:
         uint32_t rng = 0x2545F491u;
         // era tone
         float hpCoef = 0.0f, hpL = 0.0f, hpR = 0.0f, hiss = 0.0f, drive = 0.0f, driveNorm = 1.0f;
+        // loudness match: weighted power of the dry and the era-coloured signal, gain = sqrt(dry / wet)
+        float agDry = 0.0f, agWet = 0.0f, agHd = 0.0f, agHw = 0.0f, ag = 1.0f, agTarget = 1.0f; int agCount = 0;
         bool mono = false, peakOn = false;
         int peakStyle = -1;
         float pb0 = 1, pb1 = 0, pb2 = 0, pa1 = 0, pa2 = 0, pz[2][2] = {{0, 0}, {0, 0}};
         // slip shadow: where the record would be without the hand
         double slipX = 0.0, slipVel = 0.0;
         bool slipValid = false;
+        // LIVE: the deck plays the FEED ring instead of its slot (savedX = where the slot record was)
+        bool live = false, savedMotor = false;
+        double savedX = 0.0;
     };
 
     enum Source { kSrcNone = 0, kSrcPitchBend, kSrcModWheel, kSrcScratch, kSrcJog, kSrcPad, kSrcHelper };
@@ -789,6 +858,104 @@ private:
         }
     }
 
+    // ---- LIVE: copy the new FEED frames into the live ring, build its mips, start / stop the live deck ----
+    void liveBlock(int frames)
+    {
+        (void)frames;
+        skrfeed::Shared* f = feed_.load(std::memory_order_acquire);
+        if (f != liveFeed_ && liveFeed_ != nullptr && liveDeck_ >= 0) liveFeed_->h.liveOn.store(0);
+        liveFeed_ = f;
+        retOn_ = false;
+        bool feedOk = false;
+        if (f != nullptr && liveRec_ != nullptr)
+        {
+            const uint64_t w = f->h.writePos.load(std::memory_order_acquire);
+            const uint32_t alive = f->h.feedAlive.load(std::memory_order_relaxed);
+            if (alive != lastFeedAlive_) { lastFeedAlive_ = alive; feedIdle_ = 0; } else if (feedIdle_ < 100000000) feedIdle_ += frames;
+            feedOk = feedIdle_ < (int)(0.5 * sr_);
+            if (liveIn_ > w || w - liveIn_ > (uint64_t)(kLiveN / 2))
+            {
+                liveIn_ = w > 8192 ? w - 8192 : 0;          // (re)connect: start a fresh history
+                for (int k = 0; k < kMipLevels; ++k) liveCnt_[k] = liveIn_ >> k;
+            }
+            const uint32_t fsr = f->h.sampleRate.load(std::memory_order_relaxed);
+            if (fsr > 1000) liveRec_->sampleRate = (double)fsr;
+            std::vector<float>& L0 = liveRec_->lv[0][0];
+            std::vector<float>& R0 = liveRec_->lv[0][1];
+            while (liveIn_ < w)
+            {
+                const uint32_t ci = (uint32_t)(liveIn_ & skrfeed::kCapMask), li = (uint32_t)(liveIn_ & (kLiveN - 1));
+                L0[li] = f->cap[2 * ci]; R0[li] = f->cap[2 * ci + 1];
+                ++liveIn_;
+            }
+            liveCnt_[0] = liveIn_;
+            for (int k = 1; k < kMipLevels; ++k)
+            {
+                const uint32_t srcMask = (kLiveN >> (k - 1)) - 1, dstMask = (kLiveN >> k) - 1;
+                const int half = (HalfbandFir::N - 1) / 2;
+                while (2 * liveCnt_[k] + (uint64_t)half < liveCnt_[k - 1])
+                {
+                    const int64_t centre = (int64_t)(2 * liveCnt_[k]);
+                    for (int c = 0; c < 2; ++c)
+                    {
+                        const std::vector<float>& src = liveRec_->lv[k - 1][c];
+                        float acc = 0.0f;
+                        for (int t = 0; t < HalfbandFir::N; ++t)
+                        {
+                            const int64_t idx = centre + t - half;
+                            if (idx >= 0) acc += fir_.h[t] * src[(size_t)((uint64_t)idx & srcMask)];
+                        }
+                        liveRec_->lv[k][c][(size_t)(liveCnt_[k] & dstMask)] = std::fabs(acc) < 1e-20f ? 0.0f : acc;
+                    }
+                    ++liveCnt_[k];
+                }
+            }
+            liveHeadU_ = w;
+            liveHead_ = (double)w;
+        }
+        const bool want = getBool(kLiveOn) && feedOk;
+        if (want && liveDeck_ < 0) startLive(activeDeck_);
+        else if (!want && liveDeck_ >= 0) stopLive();
+        if (getBool(kLiveOn) && f == nullptr && feedLostBlocks_++ > (int)(1.0 * sr_ / std::max(1, frames))) { setFromAudio(kLiveOn, 0.0f); feedLostBlocks_ = 0; }
+        if (f != nullptr) feedLostBlocks_ = 0;
+        retOn_ = liveDeck_ >= 0 && f != nullptr && f->h.replaceMode.load(std::memory_order_relaxed) == 1;
+    }
+
+    void startLive(int d)
+    {
+        Deck& D = deck_[d];
+        D.savedX = D.x;
+        D.savedMotor = D.motorOn;
+        if (const Record* old = D.slot[D.cur]) { D.xOldRec = old; D.xOld = D.x; D.xfade = 1.0f; }
+        D.live = true;
+        liveDeck_ = d;
+        placeAt(D, liveHead_ - liveLag_);                // "now" in the track
+        if (!D.motorOn) { setFromAudio(deckP_[d].play, 1.0f); refreshMotors(); }
+        D.vel = liveRec_->sampleRate / sr_; D.catching = false;
+    }
+
+    void stopLive()
+    {
+        Deck& D = deck_[liveDeck_];
+        if (D.handActive) letGo(D);
+        D.xOldRec = liveRec_; D.xOld = D.x; D.xfade = 1.0f;
+        D.live = false;
+        placeAt(D, D.savedX);
+        if (!D.savedMotor && D.motorOn) { setFromAudio(deckP_[liveDeck_].play, 0.0f); refreshMotors(); D.vel = 0.0; }
+        if (liveFeed_ != nullptr) liveFeed_->h.liveOn.store(0);
+        liveDeck_ = -1;
+    }
+
+    // the live deck never reads ahead of the FEED (no data yet) nor further back than the ring holds
+    void clampLive(Deck& D)
+    {
+        const double hi = liveHead_ - 64.0, lo = liveHead_ - (double)kLiveN + 16384.0;
+        if (D.x > hi) { D.x = hi; if (D.vel > 0.0 && !D.handActive) D.vel = std::min(D.vel, liveRec_->sampleRate / sr_); }
+        else if (D.x < lo) D.x = lo;
+    }
+
+    const Record* recOf(const Deck& D) const { return (D.live && liveRec_ != nullptr) ? liveRec_ : D.slot[D.cur]; }
+
     void placeAt(Deck& D, double pos)
     {
         const double shift = pos - D.x;
@@ -833,7 +1000,7 @@ private:
 
             D.style = mpc::clamp(getInt(P.style), 0, kNumStyles - 1);
             const Style& St = kStyles[D.style];
-            const Record* r = D.slot[D.cur];
+            const Record* r = recOf(D);
             const double fileSr = r != nullptr ? r->sampleRate : sr_;
             D.unity = fileSr / sr_;
             const double speedRatio = getInt(P.speed) == 1 ? 1.35 : 1.0;
@@ -1075,6 +1242,15 @@ private:
         const bool helper = handSrc_ == kSrcHelper;
         D.handActive = false;
         if (&D == &deck_[activeDeck_]) { handSrc_ = kSrcNone; releasePending_ = 0; }
+        if (D.live && getInt(kLiveSnap) == 0)
+        {
+            // LIVE + SOFORT ZURUECK: the track drops back in exactly where it is now, in time with the beat
+            jumpTo(D, liveHead_ - liveLag_);
+            const int d = &D == &deck_[0] ? 0 : 1;
+            if (!D.motorOn) { setFromAudio(deckP_[d].play, 1.0f); refreshMotors(); }
+            D.vel = liveRec_->sampleRate / sr_; D.catching = false; D.slipValid = false;
+            return;
+        }
         if (slipOn_ && D.slipValid)
         {
             // SLIP: the record carries on where it would be if you had never touched it
@@ -1235,7 +1411,7 @@ private:
 
     void jumpTo(Deck& D, double pos)
     {
-        const Record* r = D.slot[D.cur];
+        const Record* r = recOf(D);
         if (r != nullptr) { D.xOldRec = r; D.xOld = D.x; D.xfade = 1.0f; }
         placeAt(D, pos);
     }
@@ -1253,7 +1429,7 @@ private:
         for (int i = from; i < to; ++i)
         {
             if (releasePending_ > 0 && --releasePending_ == 0) letGo(act);
-            float outL = 0.0f, outR = 0.0f;
+            float outL = 0.0f, outR = 0.0f, retL = 0.0f, retR = 0.0f;
             for (int d = 0; d < 2; ++d)
             {
                 Deck& D = deck_[d];
@@ -1275,13 +1451,14 @@ private:
                 if (g < 1e-6f) { D.xfade = 0.0f; D.xOldRec = nullptr; continue; }   // closed: nothing to hear
                 float sl = 0.0f, sr = 0.0f;
                 readDeck(D, sl, sr, xfadeStep);
-                outL += sl * g; outR += sr * g;
+                if (retOn_ && d == liveDeck_) { retL += sl * g; retR += sr * g; }   // back to the track via FEED
+                else { outL += sl * g; outR += sr * g; }
             }
 
             // teacher: watches the active deck, ticks the click
             if (teacher_.running)
             {
-                const Record* r = act.slot[act.cur];
+                const Record* r = recOf(act);
                 const bool aud = act.audible * act.cutGain > 0.5f;
                 const float c = teacher_.tick(act.x, act.vel, act.handActive && handSrc_ != kSrcHelper, aud, act.motorOn, act.stripScale, r != nullptr, sr_);
                 if (teacher_.tempoUp) { teacher_.tempoUp = false; setFromAudio(kHBpm, std::min(110.0f, get(kHBpm) + 6.0f)); }
@@ -1306,6 +1483,14 @@ private:
             float ol = mpc::dsp::sanitize(outL * levelGain_), orr = mpc::dsp::sanitize(outR * levelGain_);
             if (std::fabs(ol) < 1e-20f) ol = 0.0f;
             if (std::fabs(orr) < 1e-20f) orr = 0.0f;
+            ol = safetyClip(ol); orr = safetyClip(orr);   // never over 0 dBFS, transparent below -1 dBFS
+            if (retOn_)
+            {
+                const uint32_t k = (uint32_t)((liveHeadU_ + (uint64_t)i) & skrfeed::kRetMask);
+                // unity: the track keeps its own level when it goes LIVE (SKRATCHA's Level is for SKRATCHA's track)
+                liveFeed_->ret[2 * k] = safetyClip(mpc::dsp::sanitize(retL));
+                liveFeed_->ret[2 * k + 1] = safetyClip(mpc::dsp::sanitize(retR));
+            }
             L[i] = ol;
             if (R) R[i] = orr;
         }
@@ -1369,7 +1554,8 @@ private:
 
     void readDeck(Deck& D, float& sl, float& sr, float xfadeStep)
     {
-        const Record* rec = D.slot[D.cur];
+        if (D.live) clampLive(D);
+        const Record* rec = recOf(D);
         const double speed = std::fabs(D.vel);
         if (rec != nullptr) readAt(*rec, D.x, speed, D.loop, sl, sr);
         if (D.xfade > 0.0f)
@@ -1380,6 +1566,13 @@ private:
             sl += (ol - sl) * D.xfade; sr += (orr - sr) * D.xfade;
             D.xfade = std::max(0.0f, D.xfade - xfadeStep);
             if (D.xfade <= 0.0f) D.xOldRec = nullptr;
+        }
+        // loudness of the dry record (weighted: presence counts more, like the ear)
+        {
+            const float m = 0.5f * (sl + sr);
+            D.agHd += (m - D.agHd) * agHpCoef_;
+            const float w = m + 1.5f * (m - D.agHd);
+            D.agDry += (w * w - D.agDry) * agCoef_;
         }
         // era tone: mono, high pass, resonance, saturation, then the low pass below
         if (D.mono) { const float m = 0.5f * (sl + sr); sl = sr = m; }
@@ -1404,6 +1597,20 @@ private:
             D.lpL += (sl - D.lpL) * D.lpCoef; D.lpR += (sr - D.lpR) * D.lpCoef;
             D.lp2L += (D.lpL - D.lp2L) * D.lpCoef; D.lp2R += (D.lpR - D.lp2R) * D.lpCoef;
             sl = D.lp2L; sr = D.lp2R;
+        }
+        // auto gain: the coloured record plays exactly as loud as the dry one, whatever the era
+        {
+            const float m = 0.5f * (sl + sr);
+            D.agHw += (m - D.agHw) * agHpCoef_;
+            const float w = m + 1.5f * (m - D.agHw);
+            D.agWet += (w * w - D.agWet) * agCoef_;
+            if (++D.agCount >= 64)
+            {
+                D.agCount = 0;
+                if (D.agDry > 1e-7f && D.agWet > 1e-9f) D.agTarget = mpc::clamp(std::sqrt(D.agDry / D.agWet), 0.3f, 2.8f);
+            }
+            D.ag += (D.agTarget - D.ag) * agSmooth_;
+            sl *= D.ag; sr *= D.ag;
         }
         const float motion = (float)std::min(1.0, speed / std::max(1e-6, D.unity));
         if (D.rumble > 0.0f && motion > 0.01f)
@@ -1435,6 +1642,14 @@ private:
             D.popEnv *= 0.86f;
             sl += c; sr += c;
         }
+    }
+
+    static float safetyClip(float x)
+    {
+        const float a = std::fabs(x);
+        if (a <= 0.89f) return x;
+        const float y = 0.89f + 0.11f * std::tanh((a - 0.89f) / 0.11f);
+        return x < 0.0f ? -y : y;
     }
 
     static float softClip(float x) { if (x > 3.0f) return 1.0f; if (x < -3.0f) return -1.0f; return x * (27.0f + x * x) / (27.0f + 9.0f * x * x); }
@@ -1685,6 +1900,9 @@ private:
             for (int d = 0; d < 2; ++d) for (int s = 0; s < kSlots; ++s) delete retired_[d][s].exchange(nullptr);
             delete previewRetired_.exchange(nullptr);
             loadWantedSlots(false);
+            RecJob* job = nullptr;
+            { std::lock_guard<std::mutex> lk(recJobMutex_); job = recJob_; recJob_ = nullptr; }
+            if (job != nullptr) { finishRecording(*job); delete job; }
             const bool pv = getBool(kBrPreview);
             if (pv)
             {
@@ -1698,6 +1916,253 @@ private:
             else previewPath.clear();
             previewWasOn = pv;
         }
+    }
+
+    // ---- reporter helpers (2.4) ----
+    void setText(std::string& dst, const std::string& v, int idx)
+    {
+        bool changed;
+        { std::lock_guard<std::mutex> lk(textMutex_); changed = dst != v; if (changed) dst = v; }
+        if (changed) bump(idx);
+    }
+
+    void liveReporter(int tick, float& lastRecTap, int& lastGrabSeen, int& lastLiveLed, int& lastRecLed, int& lastMeter, int& feedStale)
+    {
+        auto notify = [this](int idx) { if (effect_ != nullptr && host_ != nullptr) notifyHostParameterChanged(idx); };
+        // retire old mappings 300 ms after they were swapped out (the audio thread has let go by then)
+        for (int i = 0; i < 4; ++i)
+            if (feedRetired_[i] != nullptr && tick >= feedRetireTick_[i]) { skrfeed::unmapChannel(feedRetired_[i]); feedRetired_[i] = nullptr; }
+        auto swapFeed = [&](skrfeed::Shared* fresh)
+        {
+            skrfeed::Shared* old = feed_.exchange(fresh, std::memory_order_acq_rel);
+            if (old == nullptr) return;
+            for (int i = 0; i < 4; ++i)
+                if (feedRetired_[i] == nullptr) { feedRetired_[i] = old; feedRetireTick_[i] = tick + 20; return; }
+            feedRetired_[0] = old; feedRetireTick_[0] = tick + 20;   // never happens in practice
+        };
+        const int want = mpc::clamp(getInt(kFeedSrc), 0, skrfeed::kChannels - 1);
+        skrfeed::Shared* f = feed_.load();
+        if (want != feedCh_) { feedCh_ = want; swapFeed(skrfeed::mapChannel(want, false)); f = feed_.load(); feedStale = 0; }
+        else if (f == nullptr && tick % 20 == 0) { swapFeed(skrfeed::mapChannel(want, false)); f = feed_.load(); }
+        // a FEED that stopped for 1.5 s may have been removed and put back (new shared memory): map again
+        static uint32_t lastAlive = 0;
+        if (f != nullptr)
+        {
+            const uint32_t a = f->h.feedAlive.load();
+            if (a != lastAlive) { lastAlive = a; feedStale = 0; } else ++feedStale;
+            if (feedStale == 100) { swapFeed(skrfeed::mapChannel(want, false)); f = feed_.load(); }
+        }
+        const bool feedOk = f != nullptr && feedStale < 40;
+        const double fsr = (f != nullptr && f->h.sampleRate.load() > 1000) ? (double)f->h.sampleRate.load() : sr_;
+        if (tick % 10 == 0)
+        {
+            std::string info = "FEED " + std::to_string(want + 1) + ": ";
+            if (f == nullptr) info += "NICHT GEFUNDEN";
+            else if (!feedOk) info += "PAUSE / KEIN TON";
+            else info += fmt("OK  %.0f KHZ", fsr / 1000.0) + (f->h.replaceMode.load() ? "  ERSETZT" : "  TROCKEN");
+            setText(feedInfo_, info, kFeedInfo);
+        }
+        if (tick % 3 == 0)
+        {
+            const float pk = f != nullptr ? (float)f->h.peak.load() / 1000.0f : 0.0f;
+            const int m = feedOk ? mpc::clamp((int)std::lround((20.0f * std::log10(std::max(1e-5f, pk)) + 48.0f) / 48.0f * 15.0f), 0, 15) : 0;
+            if (m != lastMeter) { lastMeter = m; setNormalised(kFeedMeter, (float)m / 15.0f); notify(kFeedMeter); }
+        }
+        const int ll = liveLedOn_.load() ? 1 : 0;
+        if (ll != lastLiveLed) { lastLiveLed = ll; set(kLiveLed, (float)ll); notify(kLiveLed); }
+        if (getBool(kLiveOn) && !feedOk && tick % 20 == 0) setText(recInfo_, "LIVE: ERST SKRATCHA FEED SETZEN", kRecInfo);
+
+        auto pushJob = [&](std::vector<float>&& data, double rate)
+        {
+            RecJob* j = new RecJob();
+            j->data = std::move(data); j->sr = rate; j->deck = recDeck_; j->slot = recSlot_;
+            std::lock_guard<std::mutex> lk(recJobMutex_);
+            delete recJob_; recJob_ = j;
+        };
+        auto copyRange = [&](uint64_t from, uint64_t to, std::vector<float>& out)
+        {
+            for (uint64_t t = from; t < to; ++t)
+            {
+                const uint32_t k = (uint32_t)(t & skrfeed::kCapMask);
+                out.push_back(f->cap[2 * k]); out.push_back(f->cap[2 * k + 1]);
+            }
+        };
+        // REC: tap = start, tap again = stop (max 15 s); records into the current slot of the active deck
+        if (getNormalised(kRecTap) != lastRecTap)
+        {
+            lastRecTap = getNormalised(kRecTap);
+            if (!recOn_)
+            {
+                if (feedOk)
+                {
+                    recOn_ = true; recRead_ = f->h.writePos.load(std::memory_order_acquire);
+                    recBuf_.clear(); recBuf_.reserve((size_t)(kMaxSeconds * fsr * 2.0) + 4096);
+                    recDeck_ = mpc::clamp(getInt(kDeck), 0, 1); recSlot_ = mpc::clamp(getInt(deckP_[recDeck_].slot), 0, kSlots - 1);
+                    setText(recInfo_, "AUFNAHME ...", kRecInfo);
+                }
+                else setText(recInfo_, "KEIN FEED: SKRATCHA FEED SETZEN", kRecInfo);
+            }
+            else
+            {
+                recOn_ = false;
+                if (recBuf_.size() >= (size_t)(0.05 * fsr * 2.0)) { pushJob(std::move(recBuf_), fsr); setText(recInfo_, "SPEICHERE ...", kRecInfo); }
+                else setText(recInfo_, "ZU KURZ", kRecInfo);
+                recBuf_ = std::vector<float>();
+            }
+        }
+        if (recOn_)
+        {
+            if (!feedOk) { recOn_ = false; setText(recInfo_, "FEED WEG: AUFNAHME ABGEBROCHEN", kRecInfo); }
+            else
+            {
+                const uint64_t w = f->h.writePos.load(std::memory_order_acquire);
+                if (w < recRead_ || w - recRead_ > skrfeed::kCapFrames / 2) recRead_ = w;
+                const uint64_t maxFrames = (uint64_t)(kMaxSeconds * fsr);
+                uint64_t to = w;
+                if ((uint64_t)(recBuf_.size() / 2) + (to - recRead_) > maxFrames) to = recRead_ + (maxFrames - recBuf_.size() / 2);
+                copyRange(recRead_, to, recBuf_); recRead_ = to;
+                if (recBuf_.size() / 2 >= maxFrames)
+                {
+                    recOn_ = false; pushJob(std::move(recBuf_), fsr); recBuf_ = std::vector<float>();
+                    setText(recInfo_, "15 S VOLL - SPEICHERE ...", kRecInfo);
+                }
+                else if (tick % 6 == 0) setText(recInfo_, fmt("AUFNAHME  %.1f S", (double)(recBuf_.size() / 2) / fsr), kRecInfo);
+            }
+        }
+        const int rl = recOn_ ? 1 : 0;
+        if (rl != lastRecLed) { lastRecLed = rl; set(kRecLed, (float)rl); notify(kRecLed); }
+        // GRAB: the last 2 / 4 / 8 seconds, at once (the FEED ring always holds them)
+        const int g = getInt(kGrabTap);
+        if (g > 0 && g != lastGrabSeen)
+        {
+            static const double secs[4] = {0.0, 2.0, 4.0, 8.0};
+            if (feedOk)
+            {
+                const uint64_t w = f->h.writePos.load(std::memory_order_acquire);
+                const uint64_t n = std::min<uint64_t>(w, (uint64_t)(secs[g] * fsr));
+                std::vector<float> data; data.reserve((size_t)n * 2);
+                copyRange(w - n, w, data);
+                recDeck_ = mpc::clamp(getInt(kDeck), 0, 1); recSlot_ = mpc::clamp(getInt(deckP_[recDeck_].slot), 0, kSlots - 1);
+                if (n > 1000) { pushJob(std::move(data), fsr); setText(recInfo_, fmt("GRAB %.0f S - SPEICHERE ...", secs[g]), kRecInfo); }
+            }
+            else setText(recInfo_, "KEIN FEED: SKRATCHA FEED SETZEN", kRecInfo);
+            set(kGrabTap, 0.0f); notify(kGrabTap);
+        }
+        lastGrabSeen = getInt(kGrabTap);
+    }
+
+    // smooth design change: dip the deck picture a little, switch the picture and its label at the darkest
+    // point, fade back. Nothing is shown / hidden, so the MPC never redraws through another design.
+    void designReporter(int* dip, int* shown, int (*lastLab)[kNumStyles], int* phase, bool labels, int layout)
+    {
+        auto notify = [this](int idx) { if (effect_ != nullptr && host_ != nullptr) notifyHostParameterChanged(idx); };
+        const int shownP[3] = {kShownA, kShownB, kShownC}, dipP[3] = {kDipA, kDipB, kDipC}, labBase[3] = {kLabA, kLabB, kLabC};
+        const int active = liveActive_.load();
+        for (int k = 0; k < 3; ++k)
+        {
+            const int target = mpc::clamp(getInt(k == 2 ? kCStyle : deckP_[k].style), 0, kNumStyles - 1);
+            if (shown[k] < 0) { shown[k] = target; set(shownP[k], (float)target); notify(shownP[k]); }
+            bool switched = false;
+            if (phase[k] == 0 && target != shown[k]) phase[k] = 1;                 // start the dip
+            if (phase[k] == 1)
+            {
+                dip[k] = std::min(7, dip[k] + 4);
+                if (dip[k] >= 7) { shown[k] = target; set(shownP[k], (float)target); notify(shownP[k]); phase[k] = 2; switched = true; }
+            }
+            else if (phase[k] == 2)
+            {
+                if (target != shown[k]) phase[k] = 1;
+                else if (--dip[k] <= 0) { dip[k] = 0; phase[k] = 0; }
+            }
+            const float dv = (float)dip[k] / 7.0f;
+            if (getNormalised(dipP[k]) != dv) { setNormalised(dipP[k], dv); notify(dipP[k]); }
+            // labels: only the shown style's label turns (frames 1..48), the others show frame 0 (empty)
+            if ((!labels && !switched) || layout == 2 || (k < 2 && layout != 1) || (k == 2 && layout != 0)) continue;
+            const int d = k == 2 ? active : k;
+            const double revs = liveRevs_[d].load();
+            const int fr = 1 + mpc::clamp((int)((revs - std::floor(revs)) * kAngleFrames), 0, kAngleFrames - 1);
+            for (int st = 0; st < kNumStyles; ++st)
+            {
+                const int v = st == shown[k] ? fr : 0;
+                if (v != lastLab[k][st]) { lastLab[k][st] = v; setNormalised(labBase[k] + st, (float)v / (float)kAngleFrames); notify(labBase[k] + st); }
+            }
+        }
+    }
+
+    // a recording / grab: saved as a 24-bit WAV in My Samples/SKRATCHA REC, then loaded into its slot like any
+    // file (so the project remembers it). If the drive is read-only it stays in memory only.
+    void finishRecording(const RecJob& j)
+    {
+        const size_t frames = j.data.size() / 2;
+        char stamp[32];
+        const std::time_t now = std::time(nullptr);
+        std::strftime(stamp, sizeof(stamp), "%H%M%S", std::localtime(&now));
+        std::string name = std::string("REC ") + stamp;
+        std::string path;
+        const std::string pf = mpc::pluginFolder();
+#if !defined(_WIN32)
+        if (!pf.empty())
+        {
+            const std::string dir1 = pf + "/My Samples", dir2 = dir1 + "/SKRATCHA REC";
+            mkdir(dir1.c_str(), 0775); mkdir(dir2.c_str(), 0775);
+            std::string p = dir2 + "/" + name + ".wav";
+            for (int n = 2; n < 100; ++n) { struct stat st; if (stat(p.c_str(), &st) != 0) break; p = dir2 + "/" + name + " " + std::to_string(n) + ".wav"; }
+            if (writeWav24(p, j.data, frames, j.sr)) path = p;
+        }
+#endif
+        const int d = j.deck, sl = j.slot;
+        if (!path.empty())
+        {
+            { std::lock_guard<std::mutex> lk(wantMutex_); want_[d][sl] = path; }
+            setText(recInfo_, "FERTIG: " + name + std::string(d ? " -> B" : " -> A") + std::to_string(sl + 1), kRecInfo);
+            rescanRequested_.store(true);
+        }
+        else
+        {
+            // memory only
+            Record* r = new Record();
+            r->name = name; r->path = ""; r->sampleRate = j.sr; r->channels = 2; r->length = frames; r->len[0] = frames;
+            for (int c = 0; c < 2; ++c) { r->lv[0][c].resize(frames); for (size_t i = 0; i < frames; ++i) r->lv[0][c][i] = j.data[2 * i + (size_t)c]; }
+            buildMips(*r);
+            for (int tries = 0; tries < 200 && (pending_[d][sl].load() != nullptr || retired_[d][sl].load() != nullptr); ++tries)
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            { std::lock_guard<std::mutex> lk(wantMutex_); want_[d][sl] = "MEM:" + name; }
+            loaded_[d][sl] = "MEM:" + name;
+            { std::lock_guard<std::mutex> lk(textMutex_); slotName_[d][sl] = name; }
+            delete pending_[d][sl].exchange(r);
+            setText(recInfo_, "NUR IM SPEICHER: " + name, kRecInfo);
+        }
+        bump(deckP_[d].names + sl); bump(deckP_[d].name); bump(kANames + sl); bump(kCName);
+    }
+
+    static bool writeWav24(const std::string& path, const std::vector<float>& inter, size_t frames, double rate)
+    {
+        FILE* fp = std::fopen(path.c_str(), "wb");
+        if (fp == nullptr) return false;
+        const size_t fade = std::min(frames / 4, (size_t)(0.002 * rate));
+        const uint32_t dataBytes = (uint32_t)(frames * 2 * 3), sr = (uint32_t)std::lround(rate);
+        auto u32 = [&](uint32_t v) { const uint8_t b[4] = {(uint8_t)v, (uint8_t)(v >> 8), (uint8_t)(v >> 16), (uint8_t)(v >> 24)}; std::fwrite(b, 1, 4, fp); };
+        auto u16 = [&](uint16_t v) { const uint8_t b[2] = {(uint8_t)v, (uint8_t)(v >> 8)}; std::fwrite(b, 1, 2, fp); };
+        std::fwrite("RIFF", 1, 4, fp); u32(36 + dataBytes); std::fwrite("WAVEfmt ", 1, 8, fp);
+        u32(16); u16(1); u16(2); u32(sr); u32(sr * 6); u16(6); u16(24);
+        std::fwrite("data", 1, 4, fp); u32(dataBytes);
+        std::vector<uint8_t> buf; buf.reserve(6 * 4096);
+        for (size_t i = 0; i < frames; ++i)
+        {
+            float g = 1.0f;
+            if (i < fade) g = (float)i / (float)fade; else if (i + fade >= frames) g = (float)(frames - 1 - i) / (float)fade;
+            for (int c = 0; c < 2; ++c)
+            {
+                float v = inter[2 * i + (size_t)c] * g;
+                v = std::isfinite(v) ? mpc::clamp(v, -1.0f, 1.0f) : 0.0f;
+                const int32_t q = (int32_t)std::lround(v * 8388607.0f);
+                buf.push_back((uint8_t)q); buf.push_back((uint8_t)(q >> 8)); buf.push_back((uint8_t)(q >> 16));
+            }
+            if (buf.size() >= 6 * 4096) { std::fwrite(buf.data(), 1, buf.size(), fp); buf.clear(); }
+        }
+        if (!buf.empty()) std::fwrite(buf.data(), 1, buf.size(), fp);
+        const bool ok = std::ferror(fp) == 0;
+        return std::fclose(fp) == 0 && ok;
     }
 
     // ---- thread 3: the reporter. Cheap work only, every 15 ms: browser keys, texts, live values to the MPC ----
@@ -1725,6 +2190,10 @@ private:
         for (int r = 0; r < 7; ++r) { lastDTap[r] = getNormalised(kDTap + r); lastFTap[r] = getNormalised(kFTap + r); }
         float lastDScroll = getNormalised(kFolderScroll), lastFScroll = getNormalised(kFileScroll), accD = 0.0f, accF = 0.0f;
         int idleD = 0, idleF = 0;
+        float lastRecTap = getNormalised(kRecTap);
+        int lastGrabSeen = 0, lastLiveLed = -1, lastRecLed = -1, lastMeter = -1, feedStale = 0;
+        int dip[3] = {0, 0, 0}, shown[3] = {-1, -1, -1}, lastLab[3][kNumStyles], dipPhase[3] = {0, 0, 0};
+        for (auto& row : lastLab) for (int& v : row) v = -2;
         float lastOpenTap = getNormalised(kFolderOpenTap), lastBackTap = getNormalised(kFolderBackTap), lastLoadTap = getNormalised(kFileLoadTap);
         const auto t0 = std::chrono::steady_clock::now();
         auto notify = [this](int idx) { if (effect_ != nullptr && host_ != nullptr) notifyHostParameterChanged(idx); };
@@ -1744,27 +2213,37 @@ private:
                 set(kBrFolder, (float)mpc::clamp(getInt(kBrFolder) + step, 1, std::max(1, nF))); notify(kBrFolder);
                 set(kFolderStep, 0.0f); notify(kFolderStep);
             }
-            // tap a row (every tap flips its parameter), swipe on the list (relative scroll, re-centred when idle)
+            // 2.4: a folder row (double tap or its arrow) OPENS that folder; a file row (double tap or its arrow)
+            // LOADS that file into the current slot of the active deck. Swiping on the list scrolls it.
+            bool openNow = false;
             for (int r = 0; r < 7; ++r)
             {
                 if (getNormalised(kDTap + r) != lastDTap[r])
                 {
                     lastDTap[r] = getNormalised(kDTap + r);
-                    set(kBrFolder, (float)std::min(std::max(1, nF), folderTop_.load() + r + 1)); notify(kBrFolder);
+                    const int idx = folderTop_.load() + r;
+                    if (idx < nF) { set(kBrFolder, (float)(idx + 1)); notify(kBrFolder); openNow = true; }
                 }
                 if (getNormalised(kFTap + r) != lastFTap[r])
                 {
                     lastFTap[r] = getNormalised(kFTap + r);
-                    set(kBrFile, (float)std::min(std::max(1, numFiles_.load()), fileTop_.load() + r + 1)); notify(kBrFile);
-                    if (getBool(kAutoPreview) && !getBool(kBrPreview)) { set(kBrPreview, 1.0f); notify(kBrPreview); }
+                    const int idx = fileTop_.load() + r;
+                    if (idx < numFiles_.load())
+                    {
+                        set(kBrFile, (float)(idx + 1)); notify(kBrFile);
+                        const int d = mpc::clamp(getInt(kDeck), 0, 1);
+                        loadRequest_.store(1 + mpc::clamp(getInt(deckP_[d].slot), 0, kSlots - 1));
+                    }
                 }
             }
+            static const float kSwipeRows[3] = {8.0f, 16.0f, 32.0f};
+            const float swipeRows = kSwipeRows[mpc::clamp(getInt(kSwipeSpeed), 0, 2)];
             auto swipe = [&](int param, float& lastV, float& acc, int& idle, std::atomic<int>& top, int count, int* bumpBase)
             {
                 const float v = getNormalised(param);
                 if (std::fabs(v - lastV) > 1e-5f)
                 {
-                    acc += (v - lastV) * 40.0f;          // the whole knob travel = 40 rows
+                    acc += (v - lastV) * swipeRows;      // the whole knob travel = 8 / 16 / 32 rows
                     lastV = v; idle = 0;
                     const int steps = (int)acc;
                     if (steps != 0)
@@ -1789,7 +2268,7 @@ private:
                 set(kBrFolder, (float)(1 + (int)std::lround((1.0f - lastDPos) * (nF - 1)))); notify(kBrFolder);   // slider top = first entry
             }
             // open (double tap / OPEN) or back
-            const bool openTap = getNormalised(kFolderOpenTap) != lastOpenTap, backTap = getNormalised(kFolderBackTap) != lastBackTap;
+            const bool openTap = getNormalised(kFolderOpenTap) != lastOpenTap || openNow, backTap = getNormalised(kFolderBackTap) != lastBackTap;
             if (openTap || backTap)
             {
                 lastOpenTap = getNormalised(kFolderOpenTap); lastBackTap = getNormalised(kFolderBackTap);
@@ -1895,6 +2374,10 @@ private:
             }
             if (previewDone_.exchange(false) && getBool(kBrPreview)) { set(kBrPreview, 0.0f); notify(kBrPreview); }
 
+            // ---- 2.4 LIVE: link to SKRATCHA FEED, REC / GRAB, status ----
+            liveReporter(tick, lastRecTap, lastGrabSeen, lastLiveLed, lastRecLed, lastMeter, feedStale);
+            designReporter(dip, shown, lastLab, dipPhase, (tick & 1) == 0, getInt(kLayout));
+
             // a new lesson starts at its own tempo
             const int lesson = getInt(kHLesson);
             if (lesson != lastLesson)
@@ -1994,6 +2477,7 @@ private:
 
     // ---------------------------------------------------------------------------------------------------------
     double sr_ = 44100.0;
+    float agCoef_ = 0.0001f, agHpCoef_ = 0.07f, agSmooth_ = 0.0005f;   // auto gain: 250 ms power, 500 Hz split, 40 ms glide
     Deck deck_[2];
     DeckParams deckP_[2];
     int activeDeck_ = 0;
@@ -2039,6 +2523,29 @@ private:
     std::atomic<bool> previewDone_{false};
     // records and threads
     std::atomic<Record*> pending_[2][kSlots] = {};    // worker -> audio
+    // ---- 2.4 LIVE / RESAMPLE ----
+    static constexpr uint32_t kLiveN = 1u << 19;       // live ring: 11.9 s at 44.1 kHz (power of two)
+    std::atomic<skrfeed::Shared*> feed_{nullptr};      // mapped by the reporter, read by the audio thread
+    skrfeed::Shared* feedRetired_[4] = {nullptr, nullptr, nullptr, nullptr};
+    int feedRetireTick_[4] = {0, 0, 0, 0};
+    int feedCh_ = -1;
+    skrfeed::Shared* liveFeed_ = nullptr;              // audio thread's copy for this block
+    Record* liveRec_ = nullptr;
+    HalfbandFir fir_;
+    uint64_t liveIn_ = 0, liveCnt_[kMipLevels] = {0, 0, 0, 0, 0, 0}, liveHeadU_ = 0;
+    double liveHead_ = 0.0, liveLag_ = 608.0;
+    int liveDeck_ = -1, maxBlock_ = 512, feedIdle_ = 100000000, feedLostBlocks_ = 0;
+    uint32_t lastFeedAlive_ = 0;
+    bool retOn_ = false;
+    std::atomic<bool> liveLedOn_{false};
+    // recording (reporter thread) and the job for the loader thread
+    std::mutex recJobMutex_;
+    RecJob* recJob_ = nullptr;
+    std::vector<float> recBuf_;
+    bool recOn_ = false;
+    int recDeck_ = 0, recSlot_ = 0;
+    uint64_t recRead_ = 0;
+    std::string feedInfo_ = "FEED: -", recInfo_ = "REC: BEREIT";
     std::atomic<Record*> retired_[2][kSlots] = {};    // audio -> worker (deleted there)
     std::mutex wantMutex_;                           // never taken on the audio thread
     std::string want_[2][kSlots], loaded_[2][kSlots];
