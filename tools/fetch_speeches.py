@@ -26,16 +26,33 @@ SOURCES = [  # (Commons file, name prefix, phrases to take)
     ("1941 Roosevelt speech pearlharbor p2.ogg", "FDR 1941", 3),
     ("Neil Armstrong small step.wav", "ARMSTRONG 1969", 2),
 ]
-UA = "SKRATCHA-build/2.3 (MPC plugin default samples; GitHub Actions)"
+UA = "SKRATCHA-build/2.3 (https://github.com/jaysonfaya/skratcha; MPC plugin default samples) python-urllib"
 
 
 def fetch(name, dst):
-    url = "https://commons.wikimedia.org/wiki/Special:FilePath/" + urllib.parse.quote(name.replace(" ", "_"))
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=60) as r, open(dst, "wb") as f:
-        f.write(r.read())
-    if os.path.getsize(dst) < 20000:
-        raise RuntimeError("download too small: " + name)
+    """direct upload.wikimedia.org URL (md5 path, no redirect), polite User-Agent, retries on 429/5xx"""
+    import hashlib
+    import time
+    fn = name.replace(" ", "_")
+    h = hashlib.md5(fn.encode("utf-8")).hexdigest()
+    urls = ["https://upload.wikimedia.org/wikipedia/commons/%s/%s/%s" % (h[0], h[:2], urllib.parse.quote(fn)),
+            "https://commons.wikimedia.org/wiki/Special:FilePath/" + urllib.parse.quote(fn)]
+    last = None
+    for attempt in range(6):
+        url = urls[attempt % 2]
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=60) as r, open(dst, "wb") as f:
+                f.write(r.read())
+            if os.path.getsize(dst) < 20000:
+                raise RuntimeError("download too small: " + name)
+            print("fetched %s (%d KB)" % (name, os.path.getsize(dst) // 1024))
+            return
+        except Exception as e:  # noqa: BLE001
+            last = e
+            print("retry %s: %s" % (name, e))
+            time.sleep(5 + 15 * attempt)
+    raise RuntimeError("could not download %s: %s" % (name, last))
 
 
 def decode(path):
@@ -102,6 +119,7 @@ def main():
         src = os.path.join(tmp, name)
         if not local:
             fetch(name, src)
+            __import__("time").sleep(3)
         x = clean(decode(src))
         got = phrases(x, n_take)
         if len(got) < n_take:
