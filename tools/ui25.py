@@ -849,8 +849,8 @@ def main():
         f13 = font(F_SEMI, 13 * S)
         return [(40 * S, 40 * S, "TEST-ASSISTENT  (DENON SC6000M ODER ANDERER MIDI-CONTROLLER)", f13, "la", S),
                 (680 * S, 40 * S, "MIDI-MONITOR  (WAS GERADE ANKOMMT)", f13, "la", S),
-                (680 * S, 428 * S, "ECHTER TELLER STEUERT DAS DECK", f13, "la", S),
-                (40 * S, 600 * S, "DAS PROTOKOLL LANDET IM PLUGIN-ORDNER UNTER  SKRATCHA MIDI LOG", font(F_MED, 12 * S), "la", 0)]
+                (680 * S, 428 * S, "ECHTER TELLER STEUERT DAS DECK  (BEI SC6000M IMMER AN)", f13, "la", S),
+                (40 * S, 604 * S, "PROTOKOLL: PLUGIN-ORDNER / SKRATCHA MIDI LOG", font(F_MED, 11 * S), "la", 0)]
     sc_bg = V.flat_bg([((14, 14, 626, 614), ""), ((640, 14, 1266, 412), ""), ((640, 418, 1266, 614), "")],
                       [(30, 60, 610, 250), (660, 60, 1246, 360)], sc_items)
     sct = Tab("SC6000M", save(sc_bg, "sk_bg_sc.png"))
@@ -861,7 +861,9 @@ def main():
     toggle(sct, scpv, "Midi Monitor", "midimon", "TEST STARTEN", 40, 270, 560, 76, "silver")
     toggle(sct, scpv, "Midi Prev", "midiprev", "< ZURUECK", 40, 366, 200, 120, "dark", momentary=True)
     toggle(sct, scpv, "Midi Next", "midinext", "WEITER >", 256, 366, 344, 120, "silver", momentary=True)
-    sct.place(def_text("skScFile", 560, 34, 15, "ffd8dade", "horizontallyCentred verticallyCentred"), P["Midi File"], 40, 506, 560, 34, name="file")
+    sct.place(def_text("skScFile", 560, 30, 15, "ffd8dade", "horizontallyCentred verticallyCentred"), P["Midi File"], 40, 500, 560, 30, name="file")
+    segments(sct, scpv, "Controller", ["LERNEN", "SC6000M"], 40, 540, 134, 48, gap=6)
+    segments(sct, scpv, "Platter Dir", ["NORMAL", "UMGEKEHRT"], 330, 540, 132, 48, gap=6)
     for i in range(8):
         sct.place(def_text("skScLine", 570, 34, 17, "ffe8e9ec"), P["Midi Line %d" % (i + 1)], 672, 66 + i * 36, 570, 34, name="ml%d" % i)
     sct.place(def_text("skScStat", 570, 34, 16, "ffffb52e"), P["Midi Stats"], 672, 368, 570, 34, name="stat")

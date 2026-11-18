@@ -36,6 +36,11 @@ void block(double rpm, bool platter)
             if (!strcmp(kind, "rel64")) { if (d) add(k * 32, 0xB0, 0x1F, 64 + std::max(-63, std::min(63, d))); }
             else if (!strcmp(kind, "rel2c")) { if (d) add(k * 32, 0xB0, 0x1F, d >= 0 ? d : 128 + d); }
             else if (!strcmp(kind, "cc14")) { const int v = ((full % 16384) + 16384) % 16384; add(k * 32, 0xB0, 0x06, v >> 7); add(k * 32, 0xB0, 0x26, v & 127); }
+            else if (!strcmp(kind, "sc"))
+            {   // SC6000M: position counter (forward = down), movement (signed 14 bit), random pitch bend
+                const int posv = ((-full % 16384) + 16384) % 16384; const int mv = ((-d) % 16384 + 16384) % 16384;
+                if (d) { add(k * 32, 0xB0, 0x11, posv >> 7); add(k * 32, 0xB0, 0x31, posv & 127); add(k * 32, 0xB0, 0x37, mv >> 7); add(k * 32, 0xB0, 0x36, mv & 127); add(k * 32, 0xE0, rand() & 127, rand() & 127); }
+            }
             else { const int v = ((full % 16384) + 16384) % 16384; add(k * 32, 0xE0, v & 127, v >> 7); }
         }
     struct { VstInt32 n; VstIntPtr r; VstEvent* e[64]; } list; list.n = (int)evs.size(); list.r = 0;
@@ -60,7 +65,16 @@ int main(int, char** argv)
     auto t0 = std::chrono::steady_clock::now();
     run(1.5, 0, false, t0);
     if (getenv("PLAYTEST")) { fx->setParameter(fx, find("A Start/Stop"), 1.0f); size_t s0 = OUT.size(); run(1.5, 0, false, t0); double e=0; for (size_t i=s0;i<OUT.size();++i) e+=OUT[i]*OUT[i]; printf("ss=%.2f max=%.4f ", fx->getParameter(fx, find("A Start/Stop")), [](){float m=0; for(float v:OUT) m=std::max(m,std::fabs(v)); return m;}()); printf("play rms %.4f freq %.1f name %s\n", std::sqrt(e/(OUT.size()-s0)), freq(s0+22050,22050), disp(find("Record")).c_str()); return 0; }
-    fx->setParameter(fx, find("Midi Monitor"), 1.0f); hb = true;
+    if (!strcmp(kind, "sc")) { cpr = 3600; fx->setParameter(fx, find("Controller"), 1.0f); fx->setParameter(fx, find("Midi Monitor"), 0.0f); fx->setParameter(fx, find("Platter Follow"), 1.0f); run(0.3, 0, false, t0);
+        printf("[sc] info: %s\n", disp(find("Platter Info")).c_str());
+        size_t s1 = OUT.size(); run(1.5, 33.3333, true, t0); printf("  speed: %s  freq at 33: %.1f Hz\n", disp(find("Platter Speed")).c_str(), freq(s1 + 22050, 22050));
+        // pitch fader to +100% of 8% (bottom): CC8=0, CC40=0
+        { VstMidiEvent e[2]; memset(e,0,sizeof(e)); for(int i=0;i<2;++i){e[i].type=kVstMidiType;e[i].byteSize=sizeof(VstMidiEvent);e[i].midiData[0]=(char)0xB0;e[i].midiData[2]=0;} e[0].midiData[1]=8; e[1].midiData[1]=40;
+          struct { VstInt32 n; VstIntPtr r; VstEvent* e[2]; } l; l.n=2; l.r=0; l.e[0]=(VstEvent*)&e[0]; l.e[1]=(VstEvent*)&e[1]; fx->dispatcher(fx, effProcessEvents, 0, 0, &l, 0); }
+        size_t s2 = OUT.size(); run(1.5, 33.3333, true, t0); printf("  pitch fader bottom (+8%%): freq %.1f Hz, A Pitch %s\n", freq(s2 + 22050, 22050), disp(find("A Pitch")).c_str());
+        size_t s3 = OUT.size(); run(1.0, 0, false, t0); double e=0; for (size_t i=s3+22050;i<OUT.size();++i) e+=OUT[i]*OUT[i]; printf("  stopped rms %.4f\n", std::sqrt(e/(OUT.size()-s3-22050)));
+        fx->dispatcher(fx, effClose, 0, 0, nullptr, 0); return 0; }
+    fx->setParameter(fx, find("Controller"), 0.0f); fx->setParameter(fx, find("Midi Monitor"), 1.0f); hb = true;
     run(1.0, 0, false, t0);                 // step 1
     flip(find("Midi Next"));                // -> step 2
     run(3.0, 33.3333, true, t0);            // motor 3 s

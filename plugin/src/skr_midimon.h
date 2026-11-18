@@ -45,7 +45,7 @@ private:
 // the learned platter message, read by the audio thread
 struct PlatterDecoder
 {
-    enum Kind { kNone = 0, kRel64, kRel2c, kAbs7, kAbs14Pb, kAbs14Cc };
+    enum Kind { kNone = 0, kRel64, kRel2c, kAbs7, kAbs14Pb, kAbs14Cc, kVel14 };
     std::atomic<int> kind{kNone};
     std::atomic<int> status{0};          // 0xB0 / 0xE0 / 0x90 (type only)
     std::atomic<int> d1{0};              // controller / note number (CC MSB for kAbs14Cc)

@@ -161,6 +161,8 @@ public:
         // ---- 2.5: MIDI monitor / controller test / platter follow ----
         kMidiMon, kMidiNext, kMidiPrev, kMidiStep, kMidiT1, kMidiT2, kMidiT3, kMidiL1, kMidiStat = kMidiL1 + 8, kMidiFile,
         kPlatFollow, kPlatInfo, kPlatRpm, kPlatSpeed,
+        // ---- 2.6: fixed Denon SC6000M profile (from the user's MIDI log) ----
+        kCtrlProfile, kPlatDir,
         kNumParams
     };
 
@@ -173,7 +175,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2510;
+        i.version = 2600;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -367,6 +369,8 @@ public:
         text("platinfo", "Platter Info");
         addParam(choiceParam("platrpm", "Platter RPM", {"33 1/3", "45"}, 0));
         text("platspeed", "Platter Speed");
+        addParam(choiceParam("ctrlprof", "Controller", {"LERNEN", "SC6000M"}, 0));
+        addParam(choiceParam("platdir", "Platter Dir", {"NORMAL", "UMGEKEHRT"}, 0));
         if (numParams() != kNumParams) mpc::log("SKRATCHA: parameter count mismatch %d %d", numParams(), (int)kNumParams);
 
         deckP_[0] = {kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kFader, kReverse, kLoop, kAngle, kCutLed, kStrobe, kASlot, kAStyle, kAVol, kAName, kANames};
@@ -478,8 +482,18 @@ public:
         syncMirrors(false);
         liveBlock(ctx.numFrames);
         midiMonOn_ = getBool(kMidiMon);
+        if (getInt(kCtrlProfile) == 1)
         {
-            const bool f = getBool(kPlatFollow) && platDec_.kind.load() != skr::PlatterDecoder::kNone;
+            const float tpc = (getInt(kPlatDir) == 1 ? 1.0f : -1.0f) / 3600.0f;
+            if (platDec_.kind.load(std::memory_order_relaxed) != skr::PlatterDecoder::kVel14 || platDec_.turnsPerCount.load(std::memory_order_relaxed) != tpc)
+            {
+                platDec_.status.store(0xB0); platDec_.d1.store(54); platDec_.baseCh.store(0);
+                platDec_.turnsPerCount.store(tpc);
+                platDec_.kind.store(skr::PlatterDecoder::kVel14);
+            }
+        }
+        {
+            const bool f = (getBool(kPlatFollow) || getInt(kCtrlProfile) == 1) && platDec_.kind.load() != skr::PlatterDecoder::kNone;   // SC6000M: the platter always drives
             if (!f && platFollowOn_) for (Deck& X : deck_) if (X.handActive && handSrc_ == kSrcJog) letGo(X);
             if (f && !platFollowOn_) { platLast_[0] = platLast_[1] = -1; }
             platFollowOn_ = f;
@@ -519,6 +533,7 @@ public:
             if (ev.sampleOffset > pos) { render(ctx, pos, ev.sampleOffset); pos = ev.sampleOffset; }
             eventClock_ = blockClock_ + ev.sampleOffset;
             { skr::MidiRec r; r.clock = (uint64_t)eventClock_; r.n = ev.size; r.b[0] = ev.data[0]; r.b[1] = ev.data[1]; r.b[2] = ev.data[2]; midiRing_.push(r); }
+            if (scEvent(ev)) continue;
             if (platterEvent(ev)) continue;
             if (platFollowOn_ && ctrlKnown(ev)) continue;        // other controller messages (heartbeat, keys) do not trigger pads
             if (midiMonOn_ && !platFollowOn_) continue;          // while the test runs, the controller does not play the decks
@@ -1352,6 +1367,60 @@ private:
         D.interpStep = (D.rawTarget - D.handTarget) / (double)D.interpLeft;
     }
 
+    // ---- Denon SC6000M (computer mode), decoded from the user's log 2026-11-18:
+    //  platter: every ~1 ms  B0 11/31 (14-bit position counter), B0 37/36 (signed 14-bit movement), E0 (unused);
+    //           3600 steps per turn (Denon spec), motor forward = negative steps; nothing is sent while it stands
+    //  pitch fader CC8/CC40 (14 bit, top = 127 = minus), PLAY = note 1, CUE = note 2, pads 1-8 = notes 32-39,
+    //  all keys send note on 127 / note off 64. Layer A = channel 1, layer B = channel 2.
+    bool scEvent(const mpc::MidiEvent& ev)
+    {
+        if (getInt(kCtrlProfile) != 1) return false;
+        const int ch = ev.channel();
+        if (ch > 1) return false;
+        const int layer = ch;
+        // the SC6000M sends pitch bend only together with its platter frames: swallow it only then, so the MPC's
+        // own touch strip (pitch bend too) keeps working
+        if (ev.isPitchBend()) return eventClock_ - scSeenClock_ < 0.05 * sr_;
+        if (ev.isController())
+        {
+            const int cc = ev.data[1];
+            if (cc == 17 || cc == 49 || cc == 54 || cc == 55) scSeenClock_ = eventClock_;
+            if (cc == 17 || cc == 49) return true;                          // position counter: not needed
+            if (cc == 54 || cc == 55) return platterEvent(ev) || true;      // movement: the platter (when followed)
+            if (cc == 8) { scPitchMsb_[layer] = ev.data[2]; return true; }
+            if (cc == 40)
+            {
+                const int v = scPitchMsb_[layer] * 128 + ev.data[2];
+                const float pct = mpc::clamp((float)(8192 - v) / 8192.0f * 100.0f, -100.0f, 100.0f);
+                setFromAudio(deckP_[layer].pitch, std::fabs(pct) < 0.6f ? 0.0f : pct);   // small dead zone at the centre
+                return true;
+            }
+            return cc == 3 || cc == 6 || cc == 7;                           // encoders / strip: not mapped yet
+        }
+        const bool on = ev.isNoteOn() && ev.data[2] == 127, off = ev.isNoteOff() && (ev.data[2] == 64 || ev.status() == 0x80);
+        if (!on && !off) return false;
+        const int n = ev.note();
+        const bool scKey = n <= 30 || (n >= 32 && n <= 39) || n == 52 || n == 53;
+        if (!scKey) return false;
+        if (!on) return true;
+        if (n == 1)                                                          // PLAY: start / stop the deck
+        {
+            setFromAudio(deckP_[layer].play, getBool(deckP_[layer].play) ? 0.0f : 1.0f);
+            refreshMotors();
+        }
+        else if (n == 2)                                                     // CUE: back to the start of the record
+        {
+            if (layer == activeDeck_) jumpTo(deck_[layer], 0.0);
+            else { deck_[layer].x = 0.0; }
+        }
+        else if (n >= 32 && n <= 39)                                         // pads 1-8: the 8 records of this deck
+        {
+            setFromAudio(deckP_[layer].slot, (float)(n - 32));
+            if (layer != activeDeck_) setFromAudio(kDeck, (float)layer);
+        }
+        return true;
+    }
+
     // every message key the controller sent during the test (status byte incl. channel x number)
     std::atomic<uint32_t> ctrlSeen_[1024] = {};
     bool ctrlKnown(const mpc::MidiEvent& ev) const
@@ -1381,6 +1450,15 @@ private:
             if (platLast_[layer] >= 0) { int d = v - platLast_[layer]; if (d > 8192) d -= 16384; else if (d < -8192) d += 16384; counts = d; }
             platLast_[layer] = v;
         }
+        else if (kind == skr::PlatterDecoder::kVel14)
+        {
+            // SC6000M: CC55 = high byte, CC54 = low byte of the signed movement since the last frame (1 kHz)
+            if (ev.data[1] == 55) { platMsb_[layer] = ev.data[2]; return true; }
+            if (ev.data[1] != 54) return false;
+            int v = platMsb_[layer] * 128 + ev.data[2];
+            if (v >= 8192) v -= 16384;
+            counts = v;
+        }
         else
         {
             if (ev.data[1] != d1 && !(kind == skr::PlatterDecoder::kAbs14Cc && ev.data[1] == d1 + 32)) return false;
@@ -1408,7 +1486,14 @@ private:
         Deck& D = deck_[activeDeck_];
         const Record* rec = recOf(D);
         const double platRpm = getInt(kPlatRpm) == 1 ? 45.0 : 100.0 / 3.0;
-        const double samples = turns * 60.0 / platRpm * (rec != nullptr ? rec->sampleRate : sr_);
+        double pitchMul = 1.0;
+        if (getInt(kCtrlProfile) == 1)
+        {
+            static const double ranges[3] = {0.08, 0.16, 0.50};
+            const DeckParams& P = deckP_[activeDeck_];
+            pitchMul = 1.0 + get(P.pitch) * 0.01 * ranges[mpc::clamp(getInt(P.prange), 0, 2)];
+        }
+        const double samples = turns * pitchMul * 60.0 / platRpm * (rec != nullptr ? rec->sampleRate : sr_);
         const double deckTurns = D.samplesPerRev > 1.0 ? samples / D.samplesPerRev : 0.0;
         if (turns != 0.0) jogEvent(deckTurns);
         else idleSamples_ = 0;      // a held, still platter: keep holding the record
@@ -2109,6 +2194,7 @@ private:
     // learn the platter from a step where it turned a known amount
     bool learnPlatter(double expectedTurns, bool perSecond)
     {
+        if (getInt(kCtrlProfile) == 1) return true;      // the SC6000M profile is fixed, nothing to learn
         const skr::KeyStat* best = nullptr;
         for (const skr::KeyStat& k : mon_.stats)
         {
@@ -2293,6 +2379,15 @@ private:
             const double dt = std::chrono::duration<double>(now - mon_.lastSpeedT).count();
             const double t = platTurns_.load();
             std::string sp;
+            {
+                const std::string want = getInt(kCtrlProfile) == 1 ? std::string("SC6000M-PROFIL: 3600 SCHRITTE/U") : std::string();
+                if (!want.empty())
+                {
+                    bool c2;
+                    { std::lock_guard<std::mutex> lk(textMutex_); c2 = platInfo_ != want; if (c2) platInfo_ = want; }
+                    if (c2) bump(kPlatInfo);
+                }
+            }
             if (platFollowOn_) sp = fmt("TELLER %.1f U/MIN", (t - mon_.lastTurns) / std::max(0.01, dt) * 60.0);
             else if (getBool(kPlatFollow)) sp = "ERST DEN TEST MACHEN";
             mon_.lastTurns = t; mon_.lastSpeedT = now;
@@ -2958,7 +3053,8 @@ private:
     skr::PlatterDecoder platDec_;
     bool midiMonOn_ = false, platFollowOn_ = false;
     float dcXl_ = 0.0f, dcYl_ = 0.0f, dcXr_ = 0.0f, dcYr_ = 0.0f;
-    int platLast_[2] = {-1, -1}, platMsb_[2] = {0, 0};
+    int platLast_[2] = {-1, -1}, platMsb_[2] = {0, 0}, scPitchMsb_[2] = {64, 64};
+    double scSeenClock_ = -1.0e12;
     std::atomic<double> platTurns_{0.0};
     std::string midiTxt_[3], midiLines_[8], midiStat_, midiFile_ = "-", platInfo_ = "TELLER: NOCH NICHT ERKANNT", platSpeed_ = "";
     std::mutex logMutex_;

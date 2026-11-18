@@ -1,4 +1,4 @@
-# SKRATCHA 2.5.1 – zwei Scratch-Plattenspieler für die MPC
+# SKRATCHA 2.6.0 – zwei Scratch-Plattenspieler für die MPC
 
 Von **JJ DA PLUG**. Instrument-Plugin für die MPC Live III / XL (arm64) und die MPC Live / Live II / One (arm32), gebaut mit dem offiziellen MPC Plugin SDK.
 
@@ -125,6 +125,13 @@ Dafür gibt es das zweite Plugin **SKRATCHA FEED**. Es kommt als Insert auf die 
 - **Teller erkennen:** Bei Schritt 2 (Motor läuft 10 s auf 33 U/min) findet SKRATCHA die Teller-Meldung selbst. Erkannt werden relative CCs (64 ± oder Zweierkomplement), absolute 7- und 14-Bit-CCs und Pitch Bend. SKRATCHA misst auch, wie viele Schritte eine Umdrehung hat. Ohne Motor geht es über Schritt 7 (genau 1 Umdrehung von Hand).
 - **TELLER FOLGT:** Das aktive Deck folgt dem echten Teller. 1 Umdrehung bei 33 1/3 (oder 45) entspricht der normalen Geschwindigkeit, egal welcher Plattenspieler im Plugin gewählt ist. Steht der Teller still, steht die Platte. Der zweite Layer (nächster MIDI-Kanal) schaltet auf Deck B.
 - Solange der Test läuft, steuern MIDI-Daten nichts in SKRATCHA. Bei TELLER FOLGT lösen alle Meldungen, die der Controller beim Test geschickt hat, keine Pads aus.
+- **Neu in 2.6: Controller = SC6000M** (unten links im Reiter SC6000M). Das feste Profil stammt aus deinem Protokoll vom 18.11.:
+  - **Teller:** Bewegung über CC55/CC54 (14 Bit mit Vorzeichen, etwa 1000 Meldungen pro Sekunde). 3600 Schritte pro Umdrehung laut Denon. Beim Motorlauf vorwärts zählt der Teller rückwärts. Das ist eingerechnet, mit TELLER-RICHTUNG lässt es sich umdrehen. Mit diesem Profil folgt das Deck dem Teller immer.
+  - **Pitch-Fader:** CC8/CC40 → Pitch des Decks (oben = minus, wie bei Denon). Er wirkt auch auf den mitlaufenden Teller.
+  - **Tasten:** PLAY (Note 1) = Start/Stop, CUE (Note 2) = zurück an den Anfang der Platte, Pads 1–8 (Noten 32–39) = die 8 Platten des Decks.
+  - **Layer:** Layer A = Kanal 1 = Deck A, Layer B = Kanal 2 = Deck B.
+  - Den Pitch-Bend-Strom des SC6000M schluckt SKRATCHA nur, solange der Teller läuft. Der Touch Strip der MPC funktioniert also weiter.
+  - Alle anderen SC6000M-Tasten tun noch nichts.
 - **Grenzen:** SKRATCHA kann kein MIDI senden. Motor, Lichter und Display des SC6000M lassen sich deshalb nicht vom Plugin steuern. Ob die MPC den SC6000M als MIDI-Gerät annimmt, zeigt erst der Test.
 
 ## LERNEN
