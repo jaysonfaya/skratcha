@@ -849,7 +849,7 @@ def main():
         f13 = font(F_SEMI, 13 * S)
         return [(40 * S, 40 * S, "TEST-ASSISTENT  (DENON SC6000M ODER ANDERER MIDI-CONTROLLER)", f13, "la", S),
                 (680 * S, 40 * S, "MIDI-MONITOR  (WAS GERADE ANKOMMT)", f13, "la", S),
-                (680 * S, 428 * S, "TELLER: HAND = SCRATCHEN, PLUGIN-MOTOR SPIELT  /  MOTOR = TELLER IST DIE PLATTE", f13, "la", S),
+                (680 * S, 428 * S, "TELLER: HAND = OHNE MOTOR  /  MOTOR = ECHTER SC6000M-MOTOR, PLAY STARTET IHN", f13, "la", S),
                 (40 * S, 604 * S, "PROTOKOLL: PLUGIN-ORDNER / SKRATCHA MIDI LOG", font(F_MED, 11 * S), "la", 0)]
     sc_bg = V.flat_bg([((14, 14, 626, 614), ""), ((640, 14, 1266, 412), ""), ((640, 418, 1266, 614), "")],
                       [(30, 60, 610, 250), (660, 60, 1246, 360)], sc_items)

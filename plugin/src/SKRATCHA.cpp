@@ -185,7 +185,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2730;
+        i.version = 2800;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -3168,9 +3168,39 @@ private:
     void motorLoop()
     {
         bool last = false, lastStop = false;
+        // 2.8: the real SC6000M motor. Platter Mode MOTOR + Controller SC6000M: PLAY starts the motor of that layer
+        // (CC 65 = 127), stop stops it (CC 66 = 127/0). Layer A = MIDI channel 1, layer B = channel 2.
+        skrseq::Client mot;
+        int motState[2] = {-1, -1};
+        int retryWait = 0;
+        auto motSend = [&](int layer, bool run) {
+            if (run) mot.cc(layer, 65, 127);
+            else { mot.cc(layer, 66, 127); mot.cc(layer, 66, 0); }
+            motState[layer] = run ? 1 : 0;
+        };
+        auto motAllOff = [&] {
+            if (mot.fd >= 0) for (int l = 0; l < 2; ++l) if (motState[l] == 1) motSend(l, false);
+            mot.close(); motState[0] = motState[1] = -1;
+        };
         while (!stopThread_.load())
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            const bool motorMode = getInt(kCtrlProfile) == 1 && getInt(kPlatMode) == 1;
+            if (motorMode && !getBool(kMotorScan) && !getBool(kStopScan))
+            {
+                if (mot.fd < 0 && --retryWait <= 0)
+                {
+                    if (!mot.open("SC6000")) { mot.close(); retryWait = 150; setText(platInfo_, "MOTOR: SC6000M NICHT GEFUNDEN", kPlatInfo); }
+                    else setText(platInfo_, "ECHTER MOTOR AKTIV: PLAY = MOTOR AN", kPlatInfo);
+                }
+                if (mot.fd >= 0)
+                    for (int l = 0; l < 2; ++l)
+                    {
+                        const int want = getBool(deckP_[l].play) ? 1 : 0;
+                        if (want != motState[l]) motSend(l, want == 1);
+                    }
+            }
+            else if (mot.fd >= 0) motAllOff();
             const bool on = getBool(kMotorScan);
             if (on && !last) runMotorScan();
             last = on;
@@ -3178,6 +3208,7 @@ private:
             if (st && !lastStop) runStopScan();
             lastStop = st;
         }
+        motAllOff();
     }
     // start the motor with CC 65 = 127, then try candidates until the platter stops; verify by starting/stopping again
     void runStopScan()

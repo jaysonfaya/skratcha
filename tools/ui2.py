@@ -624,7 +624,7 @@ def draw_info_bg():
     _put(A, Hm, Rm, Mm, foil, FOIL, None, 0.18, 1.0)
     Hm[:] = Hm + PB.blur(foil, 0.8 * S) * 0.9 * S
     items = [(640 * S, 560 * S, "SKRATCHA  ·  CREATOR: JJ DA PLUG", font(F_BOLD, 24 * S), "mm", 3 * S),
-             (640 * S, 592 * S, "VERSION 2.7.3  ·  10 TURNTABLES  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), "mm", S)]
+             (640 * S, 592 * S, "VERSION 2.8.0  ·  10 TURNTABLES  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), "mm", S)]
     left = ["PADS = BILDSCHIRM (4 x 4)", "13 DECK A  14 DECK B  15 REV  16 SLIP", "9 CUT   10 HOLD   11 CUE   12 START",
             "1-8  SAMPLES (5-8 UEBER 1-4)", "BATTLE: LINKS A, RECHTS B (GESPIEGELT)", "HOLD + CUE = CUE SETZEN",
             "ANSICHT-TASTE = LAYOUT", "RUNDE LEUCHTE = TURNTABLE-AERA"]
