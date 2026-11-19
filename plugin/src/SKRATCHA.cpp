@@ -47,6 +47,7 @@
 #include "skr_feed.h"
 #include "skr_midimon.h"
 #include "skr_helper.h"
+#include "skr_seq.h"
 
 #include <algorithm>
 #include <dirent.h>
@@ -183,7 +184,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2710;
+        i.version = 2720;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -3187,19 +3188,26 @@ private:
 
         say("SKRATCHA Motor-Suche (Plugin-Version)");
         log += readSmall("/proc/asound/cards");
-        std::string rep;
-        const int fd = findScOut(rep);
-        log += rep; save();
-        if (fd < 0) { say("FEHLER: kein SC6000M-Ausgang im MPC-Prozess gefunden"); show("MOTOR: KEIN SC6000M-AUSGANG"); return; }
-        say("SC6000M-Ausgang = fd " + std::to_string(fd));
+        // the MPC reaches the SC6000M through the ALSA sequencer: SKRATCHA opens its own sequencer client
+        skrseq::Client sq;
+        const bool okSeq = sq.open("SC6000");
+        log += sq.log; save();
+        if (!okSeq) { say("FEHLER: SC6000M im Sequencer nicht gefunden"); show("MOTOR: SC6000M NICHT IM SEQUENCER"); return; }
         auto send = [&](int a, int b, int c) {
-            const uint8_t m[3] = {(uint8_t)a, (uint8_t)b, (uint8_t)c};
-            for (int i = 0; i < 20; ++i) { const ssize_t w = ::write(fd, m, 3); if (w == 3) return true; if (w < 0 && errno != EAGAIN && errno != EINTR) break; std::this_thread::sleep_for(std::chrono::milliseconds(2)); }
+            const int t = a & 0xF0, ch = a & 15;
+            if (t == 0x90) return sq.note(ch, b, c);
+            if (t == 0x80) return sq.note(ch, b, 0);
+            if (t == 0xB0) return sq.cc(ch, b, c);
             return false;
         };
         if (!send(0xB0, 123, 0)) { say(std::string("FEHLER: Senden geht nicht: ") + std::strerror(errno)); show("MOTOR: SENDEN GEHT NICHT"); return; }
         say("Senden geht.");
-        auto rate = [&] { const uint32_t a = platFrames_.load(); sleepMs(1000); return (int)(platFrames_.load() - a); };
+        auto rate = [&] {
+            sq.drainPlatter();
+            const uint32_t a = platFrames_.load(); int own = 0;
+            for (int i = 0; i < 20 && !aborted(); ++i) { std::this_thread::sleep_for(std::chrono::milliseconds(50)); own += sq.drainPlatter(); }
+            return std::max((int)(platFrames_.load() - a), own);
+        };
         const int base = (rate() + rate()) / 2;
         const int th = std::max(200, base * 10 + 50);
         say("Ruhe: " + std::to_string(base) + " Teller-Frames/s, Schwelle " + std::to_string(th));
