@@ -14,6 +14,45 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
+# ---- language: SKR_LANG=en draws every German text in English (tools/lang_en.py); SKR_LANG_REC=<file> records
+#      every text that is drawn (to find what still needs a translation)
+_TR = lambda t: t
+
+
+def _lang_patch():
+    global _TR
+    lang, rec = os.environ.get("SKR_LANG", "de"), os.environ.get("SKR_LANG_REC")
+    if lang != "en" and not rec:
+        return
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import lang_en
+    seen = set()
+    def tr(t):
+        if not isinstance(t, str):
+            return t
+        if rec and t not in seen and len(t) > 1:
+            seen.add(t)
+            with open(rec, "a") as f:
+                f.write(t.replace("\n", "\\n") + "\n")
+        return lang_en.to_en(t) if lang == "en" else t
+    def wrap(cls, name, pos):
+        orig = getattr(cls, name)
+        def f(self, *a, **k):
+            a = list(a)
+            if len(a) > pos:
+                a[pos] = tr(a[pos])
+            elif "text" in k:
+                k["text"] = tr(k["text"])
+            return orig(self, *a, **k)
+        setattr(cls, name, f)
+    _TR = tr
+    wrap(ImageDraw.ImageDraw, "text", 1)
+    wrap(ImageDraw.ImageDraw, "textbbox", 1)
+    wrap(ImageDraw.ImageDraw, "textlength", 0)
+    wrap(ImageFont.FreeTypeFont, "getbbox", 0)
+    wrap(ImageFont.FreeTypeFont, "getlength", 0)
+_lang_patch()
+
 PARAMS, OUT, PREV, LOGO, FONTS = sys.argv[1:6]
 os.makedirs(OUT, exist_ok=True)
 os.makedirs(PREV, exist_ok=True)
@@ -107,6 +146,7 @@ def brushed(w, h, base, seed=7, strength=10):
 
 
 def text(d, xy, s, f, fill, anchor="la", spacing=0):
+    s = _TR(s)
     if spacing:
         x, y = xy
         if anchor[0] == "m":

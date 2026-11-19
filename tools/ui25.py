@@ -39,7 +39,7 @@ DESIGNS = [
      "label": [0.88, 0.40, 0.05], "label2": [0.95, 0.75, 0.10], "logo": [0.26, 0.11, 0.04], "logo_metal": False,
      "label_text": "SKRATCHA SOUL  ·  33 1/3 RPM  ·  STEREO 1974"},
     {"plinth": "silver", "title": "1978 DIRECT DRIVE", "vinyl": {"col": [0.014, 0.014, 0.016], "rough": 0.14, "kind": "plain"},
-     "label": [0.42, 0.045, 0.05], "logo": [1.0, 0.80, 0.42]},
+     "label": [0.62, 0.06, 0.07], "label2": [0.16, 0.008, 0.03], "radial": True, "logo": [1.0, 0.80, 0.42]},
     {"plinth": "black", "title": "1986 BATTLE", "vinyl": {"col": [0.014, 0.014, 0.016], "rough": 0.13, "kind": "splatter", "col2": [0.85, 0.85, 0.85]},
      "label": [0.93, 0.93, 0.91], "logo": [0.04, 0.04, 0.05], "logo_metal": False, "label_text": "WHITE LABEL  ·  PROMO ONLY  ·  JJ DA PLUG  ·  1986"},
     {"plinth": "gunmetal", "title": "1996 SCRATCH PRO", "vinyl": {"col": [0.10, 0.02, 0.16], "rough": 0.11, "kind": "marble", "col2": [0.45, 0.20, 0.60]},
@@ -849,7 +849,7 @@ def main():
         f13 = font(F_SEMI, 13 * S)
         return [(40 * S, 40 * S, "TEST-ASSISTENT  (DENON SC6000M ODER ANDERER MIDI-CONTROLLER)", f13, "la", S),
                 (680 * S, 40 * S, "MIDI-MONITOR  (WAS GERADE ANKOMMT)", f13, "la", S),
-                (680 * S, 428 * S, "TELLER: HAND = OHNE MOTOR  /  MOTOR = ECHTER SC6000M-MOTOR, PLAY STARTET IHN", f13, "la", S),
+                (680 * S, 428 * S, "TELLER: MOTOR = ECHTER SC6000M-MOTOR (PLAY)  /  HAND = OHNE MOTOR", f13, "la", S),
                 (40 * S, 604 * S, "PROTOKOLL: PLUGIN-ORDNER / SKRATCHA MIDI LOG", font(F_MED, 11 * S), "la", 0)]
     sc_bg = V.flat_bg([((14, 14, 626, 614), ""), ((640, 14, 1266, 412), ""), ((640, 418, 1266, 614), "")],
                       [(30, 60, 610, 250), (660, 60, 1246, 360)], sc_items)
@@ -863,8 +863,9 @@ def main():
     toggle(sct, scpv, "Midi Next", "midinext", "WEITER >", 256, 366, 344, 120, "silver", momentary=True)
     sct.place(def_text("skScFile", 270, 40, 13, "ffd8dade", "horizontallyCentred verticallyCentred"), P["Midi File"], 40, 494, 270, 40, name="file")
     toggle(sct, scpv, "Motor Scan", "motorscan", "MOTOR SUCHEN", 320, 494, 136, 40, "silver")
-    toggle(sct, scpv, "Stop Scan", "stopscan", "STOP SUCHEN", 464, 494, 136, 40, "silver")
-    segments(sct, scpv, "Controller", ["LERNEN", "SC6000M"], 40, 540, 134, 48, gap=6)
+    toggle(sct, scpv, "Stop Scan", "stopscan", "BEFEHLE SUCHEN", 464, 494, 136, 40, "silver")
+    toggle(sct, scpv, "Controller Auto", "ctrlauto", "AUTO", 40, 540, 84, 48, "dark", on_prev=True)
+    segments(sct, scpv, "Controller", ["LERNEN", "SC6000M"], 130, 540, 92, 48, gap=6)
     segments(sct, scpv, "Platter Dir", ["NORMAL", "UMGEKEHRT"], 330, 540, 132, 48, gap=6)
     for i in range(8):
         sct.place(def_text("skScLine", 570, 34, 17, "ffe8e9ec"), P["Midi Line %d" % (i + 1)], 672, 66 + i * 36, 570, 34, name="ml%d" % i)
@@ -885,7 +886,7 @@ def main():
     # ================= LERNEN =================
     def le_items(S):
         f13 = font(F_SEMI, 13 * S)
-        return [(52 * S, 30 * S, "LEKTION", f13, "la", S),
+        return [(52 * S, 30 * S, "LEKTION", f13, "la", S), (40 * S, 530 * S, "EINGABE", f13, "la", S),
                 (386 * S, 316 * S, "LEHRER", font(F_SEMI, 11 * S), "la", S), (386 * S, 360 * S, "DU", font(F_SEMI, 11 * S), "la", S),
                 (480 * S, 516 * S, "TON SOLL", font(F_SEMI, 10 * S), "mm", S), (548 * S, 516 * S, "TON IST", font(F_SEMI, 10 * S), "mm", S),
                 (418 * S, 516 * S, "SCHRITT", font(F_SEMI, 10 * S), "mm", S), (886 * S, 444 * S, "SYNC", font(F_SEMI, 10 * S), "mm", S),
@@ -930,6 +931,7 @@ def main():
     disp(lern, "skSync", save(ms, "sk_sync_f11.png"), 11, "Sync", 822, 456, 130, 26)
     lern.place(def_text("skScore", 290, 40, 16, "ffd8dade", "horizontallyCentred verticallyCentred"), P["Score"], 956, 456, 290, 40, name="score")
     lern.place(def_text("skMsg", 860, 40, 22, "ffffb52e", "horizontallyCentred verticallyCentred"), P["Tip"], 386, 522, 860, 40, name="msg")
+    segments(lern, lpv, "Learn Input", ["AUTO", "STRIP", "SC6000M"], 34, 546, 94, 50, gap=9)
     toggle(lern, lpv, "Lesson Demo", "demo", "DEMO", 386, 568, 170, 44, "silver")
     toggle(lern, lpv, "Lesson Start", "lstart", "UEBEN", 566, 568, 170, 44, "silver")
     toggle(lern, lpv, "Click", "click", "KLICK", 746, 568, 120, 44, "dark", on_prev=True)
@@ -962,6 +964,7 @@ def main():
             it.append((40 * S, (44 + r * 146) * S, "Q-LINK %d-%d" % (13 - 4 * r, 16 - 4 * r), font(F_SEMI, 10 * S), "la", S))
         it.append((880 * S, 30 * S, "PER TOUCH", font(F_BOLD, 15 * S), "la", 2 * S))
         it.append((880 * S, 588 * S, "JEDE REIHE = 4 Q-LINKS (OBEN = 13-16)", font(F_MED, 12 * S), "la", 0))
+        it.append((880 * S, 520 * S, "SPRACHE / LANGUAGE", font(F_BOLD, 13 * S), "la", 2 * S))
         return it
     su_bg = V.flat_bg([((20, 10, 850, 616), ""), ((862, 10, 1260, 616), "")], [], su_items)
     setup = Tab("SETUP", save(su_bg, "sk_bg_setup.png"))
@@ -972,6 +975,7 @@ def main():
                                            ("Pad Base", "padbase", "PAD 1 = C#1", False), ("Deck On", "deckonS", "DECK ON", True), ("Reverse", "revS", "REVERSE", False),
                                            ("Click", "clickS", "LEHRER-KLICK", True), ("Auto Preview", "apS", "AUTO-HOEREN", True)]):
         toggle(setup, spv, pn, nm, lab, 880 + (i % 2) * 186, 60 + (i // 2) * 120, 176, 70, "dark", on_prev=onp)
+    segments(setup, spv, "Language", ["DEUTSCH", "ENGLISH"], 880, 532, 176, 44, gap=10)
     spv.convert("RGB").save(os.path.join(PREV, "preview_setup.png"))
 
     # ================= INFO =================

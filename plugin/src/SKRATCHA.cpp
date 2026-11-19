@@ -48,9 +48,11 @@
 #include "skr_midimon.h"
 #include "skr_helper.h"
 #include "skr_seq.h"
+#include "skr_lang.h"
 
 #include <algorithm>
 #include <dirent.h>
+#include <poll.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <cerrno>
@@ -173,6 +175,10 @@ public:
         // ---- 2.7.1: search for the SC6000M motor command (writes into the MPC's own MIDI connection) ----
         kMotorScan,
         kStopScan,          // 2.7.3: search the command that stops the SC6000M motor again (start = CC 65)
+        // ---- 2.9 ----
+        kCtrlAuto,          // a connected SC6000M is used at once (profile, platter, motor) - no setup needed
+        kLang,              // DEUTSCH / ENGLISH: every text on the screen
+        kLearnIn,           // LERNEN input: AUTO / TOUCH STRIP / SC6000M
         kNumParams
     };
 
@@ -185,7 +191,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2800;
+        i.version = 2900;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -194,6 +200,8 @@ public:
 
     SKRATCHA() : mpc::Plugin(makeInfo())
     {
+        for (auto& a : scMem_) for (auto& b : a) for (double& m : b) m = -1.0;
+        for (double& t : seqNoteClock_) t = -1.0e12;
         using namespace mpc;
         auto live = [](Param p) { p.automatable = SKRATCHA_LIVE_AUTOMATABLE != 0; return p; };
         auto fixed = [](Param p) { p.automatable = false; return p; };
@@ -383,9 +391,12 @@ public:
         addParam(choiceParam("platdir", "Platter Dir", {"NORMAL", "UMGEKEHRT"}, 0));
         // HAND: the platter is your hand on the record, SKRATCHA's own motor plays it (PLAY = start/stop);
         // MOTOR: the platter is the record itself (only when its motor really turns)
-        addParam(choiceParam("platmode", "Platter Mode", {"HAND", "MOTOR"}, 0));
+        addParam(choiceParam("platmode", "Platter Mode", {"HAND", "MOTOR"}, 1));
         addParam(fixed(boolParam("motorscan", "Motor Scan", false)));
         addParam(fixed(boolParam("stopscan", "Stop Scan", false)));
+        addParam(fixed(boolParam("ctrlauto", "Controller Auto", true)));
+        addParam(fixed(choiceParam("lang", "Language", {"DEUTSCH", "ENGLISH"}, 0)));
+        addParam(fixed(choiceParam("learnin", "Learn Input", {"AUTO", "TOUCH STRIP", "SC6000M"}, 0)));
         if (numParams() != kNumParams) mpc::log("SKRATCHA: parameter count mismatch %d %d", numParams(), (int)kNumParams);
 
         deckP_[0] = {kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kFader, kReverse, kLoop, kAngle, kCutLed, kStrobe, kASlot, kAStyle, kAVol, kAName, kANames};
@@ -499,9 +510,30 @@ public:
         syncMirrors(false);
         liveBlock(ctx.numFrames);
         midiMonOn_ = getBool(kMidiMon);
-        if (getInt(kCtrlProfile) == 1)
+        // seq path: the SC6000M as read by SKRATCHA's own sequencer client (independent of the track's MIDI input)
+        seqActive_ = seqLive_.load(std::memory_order_acquire);
+        if (seqActive_)
         {
-            const float tpc = (getInt(kPlatDir) == 1 ? 1.0f : -1.0f) / 3600.0f;
+            skr::MidiRec r;
+            while (seqRing_.pop(r))
+            {
+                mpc::MidiEvent ev; ev.size = 3; ev.data[0] = r.b[0]; ev.data[1] = r.b[1]; ev.data[2] = r.b[2]; ev.sampleOffset = 0;
+                eventClock_ = blockClock_;
+                if ((ev.data[0] & 0xF0) == 0xB0 && (ev.data[1] == 54 || ev.data[1] == 55)) platFrames_.fetch_add(1, std::memory_order_relaxed);
+                { skr::MidiRec m = r; m.clock = (uint64_t)eventClock_; midiRing_.push(m); }
+                noteSeqSeen(ev);
+                if (!scEvent(ev, true)) platterEvent(ev);
+            }
+        }
+        if (seqActive_) flushHeldHost();
+        if (scActive())
+        {
+            // forward on the SC6000M = positive movement (Denon: 1..63 forward, 127..64 reverse). The scale is
+            // measured when the motor starts: the free-running platter = the record at exactly its normal speed.
+            const float cal = calCps_.load(std::memory_order_relaxed);
+            const double prpm = getInt(kPlatRpm) == 1 ? 45.0 : 100.0 / 3.0;
+            const float mag = cal > 100.0f ? (float)(prpm / 60.0 / (double)cal) : 1.0f / 3600.0f;
+            const float tpc = (getInt(kPlatDir) == 1 ? -1.0f : 1.0f) * (float)calSign_.load(std::memory_order_relaxed) * mag;
             if (platDec_.kind.load(std::memory_order_relaxed) != skr::PlatterDecoder::kVel14 || platDec_.turnsPerCount.load(std::memory_order_relaxed) != tpc)
             {
                 platDec_.status.store(0xB0); platDec_.d1.store(54); platDec_.baseCh.store(0);
@@ -510,7 +542,7 @@ public:
             }
         }
         {
-            const bool f = (getBool(kPlatFollow) || getInt(kCtrlProfile) == 1) && platDec_.kind.load() != skr::PlatterDecoder::kNone;   // SC6000M: the platter always drives
+            const bool f = (getBool(kPlatFollow) || scActive()) && platDec_.kind.load() != skr::PlatterDecoder::kNone;   // SC6000M: the platter always drives
             if (!f && platFollowOn_) for (Deck& X : deck_) if (X.handActive && handSrc_ == kSrcJog) letGo(X);
             if (f && !platFollowOn_) { platLast_[0] = platLast_[1] = -1; }
             platFollowOn_ = f;
@@ -551,7 +583,8 @@ public:
             eventClock_ = blockClock_ + ev.sampleOffset;
             if ((ev.data[0] & 0xF0) == 0xB0 && (ev.data[1] == 54 || ev.data[1] == 55)) platFrames_.fetch_add(1, std::memory_order_relaxed);
             { skr::MidiRec r; r.clock = (uint64_t)eventClock_; r.n = ev.size; r.b[0] = ev.data[0]; r.b[1] = ev.data[1]; r.b[2] = ev.data[2]; midiRing_.push(r); }
-            if (scEvent(ev)) continue;
+            if (seqActive_ && hostFromSc(ev)) continue;
+            if (scEvent(ev, false)) continue;
             if (platterEvent(ev)) continue;
             if (platFollowOn_ && ctrlKnown(ev)) continue;        // other controller messages (heartbeat, keys) do not trigger pads
             if (midiMonOn_ && !platFollowOn_) continue;          // while the test runs, the controller does not play the decks
@@ -569,6 +602,10 @@ public:
         // live values for the background reporter
         for (int d = 0; d < 2; ++d)
         {
+            { uint32_t m = 0; for (int k = 0; k < kSlots; ++k) if (deck_[d].slot[k] != nullptr) m |= 1u << k; loadedMask_[d].store(m, std::memory_order_relaxed); }
+            curSlot_[d].store(deck_[d].cur, std::memory_order_relaxed);
+            { const Record* rr = recOf(deck_[d]); liveSlice_[d].store(rr != nullptr && rr->length > 0 ? mpc::clamp((int)(deck_[d].x / (double)rr->length * 8.0), 0, 7) : -1, std::memory_order_relaxed); }
+            cutLive_[d].store((cutHeld_ && cutDeck_ == d) || (cutLatchOn_ && cutLatchDeck_ == d), std::memory_order_relaxed);
             Deck& D = deck_[d];
             if (!std::isfinite(D.x)) { D.x = 0.0; D.handTarget = D.rawTarget = 0.0; D.interpLeft = 0; D.handVel = D.vel = 0.0; }
             const Record* r = recOf(D);
@@ -624,7 +661,16 @@ public:
         else if (index == kBrLoad && plainValue >= 0.5f) loadRequest_.store((int)std::lround(plainValue));
     }
 
+    // every value / text the MPC shows goes through here: in ENGLISH it is translated on the way out
     bool formatValue(int index, float plainValue, std::string& out) override
+    {
+        std::string s;
+        if (!formatValueDe(index, plainValue, s)) s = param(index).display(plainValue);
+        if (index != kLang && getInt(kLang) == 1) s = skrlang::toEn(s);
+        out = s;
+        return true;
+    }
+    bool formatValueDe(int index, float plainValue, std::string& out)
     {
         static const float ranges[3] = {8.0f, 16.0f, 50.0f};
         if (index == kPitch || index == kBPitch || index == kCPitch)
@@ -1281,7 +1327,7 @@ private:
         {
             idleSamples_ += frames;
             const bool timeoutSource = handSrc_ != kSrcPitchBend || timeoutRelease_;
-            const bool platterIsMotor = platFollowOn_ && handSrc_ == kSrcJog && !(getInt(kCtrlProfile) == 1 && getInt(kPlatMode) == 0);
+            const bool platterIsMotor = platFollowOn_ && handSrc_ == kSrcJog && !(scActive() && getInt(kPlatMode) == 0);
             if (platterIsMotor) { /* the real platter is the motor: the record stays where it is */ }
             // HAND: the platter only reports while it moves; 40 ms without a step = the hand has let go
             else if (platFollowOn_ && handSrc_ == kSrcJog && idleSamples_ > (int)(0.040 * sr_)) letGo(D);
@@ -1393,52 +1439,171 @@ private:
     //           3600 steps per turn (Denon spec), motor forward = negative steps; nothing is sent while it stands
     //  pitch fader CC8/CC40 (14 bit, top = 127 = minus), PLAY = note 1, CUE = note 2, pads 1-8 = notes 32-39,
     //  all keys send note on 127 / note off 64. Layer A = channel 1, layer B = channel 2.
-    bool scEvent(const mpc::MidiEvent& ev)
+    // ---------------------------------------------------------------------------------------------------------
+    // SC6000M (Denon PRIME MIDI map: the same as the LC6000 PRIME spec; layer A = channel 1, layer B = channel 2)
+    //   1 PLAY        start / stop (MOTOR mode: the real motor)      SHIFT+PLAY  instant stop of the record
+    //   2 CUE         to the cue point                               SHIFT+CUE   set the cue point here
+    //   3 / 4         jump back / forward 1 second
+    //   5 / 6         previous / next record (slot)                  SHIFT       previous / next turntable era
+    //   7 CENSOR      reverse on / off
+    //   8 LOOP IN     loop on / off     9 LOOP OUT  loop off         10 (knob press) loop on / off
+    //   CC 3 (loop knob)   deck volume      CC 6 (select knob) turntable era      18 (select press) layout
+    //   19 VINYL/MOTOR     platter mode HAND <-> MOTOR
+    //   20 SYNC       CUT (sound off while held)                     21 MASTER   HOLD (hand on the record)
+    //   22 KEY LOCK   pitch range 8 / 16 / 50 %                      23 SLIP     slip on / off
+    //   24 / 25       pitch bend - / + while held                    26 SHIFT
+    //   27 HOT CUE / 28 ROLL / 29 SLICER / 30 LOOP: what the 8 pads do
+    //     HOT CUE: the 8 records    SLICER: jump to 1/8 of the record    ROLL: jump while held, then back
+    //     LOOP: 8 memory points (empty pad = store, full pad = jump, SHIFT+pad = clear)
+    //   SHIFT + pad 1-8: turntable era 1-8          40 platter touch (when sent)
+    // The LEDs follow all of it (sent by the controller thread).
+    // ---------------------------------------------------------------------------------------------------------
+    static bool scKeyNote(int n) { return n <= 30 || (n >= 32 && n <= 40) || n == 52 || n == 53; }
+
+    // host copy of an SC6000M message while the sequencer path runs: platter/pitch/encoders are dropped, notes are
+    // dropped when the sequencer delivered the same one (or held back a moment: an MPC pad with the same number
+    // still plays, 12 ms late)
+    bool hostFromSc(const mpc::MidiEvent& ev)
     {
-        if (getInt(kCtrlProfile) != 1) return false;
+        if (!scActive()) return false;
+        const int ch = ev.channel();
+        if (ch > 1) return false;
+        if (ev.isPitchBend()) return eventClock_ - scSeenClock_ < 0.05 * sr_;
+        if (ev.isController()) { const int cc = ev.data[1]; return cc == 54 || cc == 55 || cc == 17 || cc == 49 || cc == 8 || cc == 40 || cc == 3 || cc == 6 || cc == 7; }
+        if ((ev.isNoteOn() || ev.isNoteOff()) && scKeyNote(ev.note()))
+        {
+            const int k = (ev.isNoteOn() ? 128 : 0) + ev.note();          // channel-blind: the MPC may re-channel it
+            if (eventClock_ - seqNoteClock_[k & 255] < 0.012 * sr_) return true;      // the sequencer was first
+            for (HeldNote& h : heldHost_) if (!h.used) { h.used = true; h.ev = ev; h.key = k; h.until = eventClock_ + 0.012 * sr_; return true; }
+            return false;
+        }
+        return false;
+    }
+    void noteSeqSeen(const mpc::MidiEvent& ev)
+    {
+        if (!(ev.isNoteOn() || ev.isNoteOff())) return;
+        const int k = (ev.isNoteOn() ? 128 : 0) + ev.note();
+        seqNoteClock_[k & 255] = eventClock_;
+        for (HeldNote& h : heldHost_) if (h.used && h.key == k) h.used = false;          // the held host copy was the same key
+    }
+    void flushHeldHost()
+    {
+        for (HeldNote& h : heldHost_)
+            if (h.used && blockClock_ >= h.until) { h.used = false; mpc::MidiEvent e = h.ev; e.sampleOffset = 0; handleMidi(e); }
+    }
+
+    void scSetBool(int idx, bool v) { setFromAudio(idx, v ? 1.0f : 0.0f); }
+    void scStyleStep(int layer, int dir) { const int st = getInt(deckP_[layer].style); setFromAudio(deckP_[layer].style, (float)((st + dir + kNumStyles) % kNumStyles)); }
+
+    bool scEvent(const mpc::MidiEvent& ev, bool fromSeq)
+    {
+        if (!scActive()) return false;
         const int ch = ev.channel();
         if (ch > 1) return false;
         const int layer = ch;
+        if (seqActive_ && !fromSeq) return false;        // the sequencer copy is the one that counts
         // the SC6000M sends pitch bend only together with its platter frames: swallow it only then, so the MPC's
         // own touch strip (pitch bend too) keeps working
-        if (ev.isPitchBend()) return eventClock_ - scSeenClock_ < 0.05 * sr_;
+        if (ev.isPitchBend()) return fromSeq || eventClock_ - scSeenClock_ < 0.05 * sr_;
+        Deck& D = deck_[layer];
+        const DeckParams& P = deckP_[layer];
         if (ev.isController())
         {
-            const int cc = ev.data[1];
+            const int cc = ev.data[1], v = ev.data[2];
             if (cc == 17 || cc == 49 || cc == 54 || cc == 55) scSeenClock_ = eventClock_;
             if (cc == 17 || cc == 49) return true;                          // position counter: not needed
-            if (cc == 54 || cc == 55) return platterEvent(ev) || true;      // movement: the platter (when followed)
-            if (cc == 8) { scPitchMsb_[layer] = ev.data[2]; return true; }
+            if (cc == 54 || cc == 55) return platterEvent(ev) || true;      // movement: the platter
+            if (cc == 8) { scPitchMsb_[layer] = v; return true; }
             if (cc == 40)
             {
-                const int v = scPitchMsb_[layer] * 128 + ev.data[2];
-                const float pct = mpc::clamp((float)(8192 - v) / 8192.0f * 100.0f, -100.0f, 100.0f);
-                setFromAudio(deckP_[layer].pitch, std::fabs(pct) < 0.6f ? 0.0f : pct);   // small dead zone at the centre
+                const int full = scPitchMsb_[layer] * 128 + v;
+                const float pct = mpc::clamp((float)(8192 - full) / 8192.0f * 100.0f, -100.0f, 100.0f);
+                scPitchBase_[layer] = std::fabs(pct) < 0.6f ? 0.0f : pct;   // small dead zone at the centre
+                if (scNudge_[layer] == 0) setFromAudio(P.pitch, scPitchBase_[layer]);
                 return true;
             }
-            return cc == 3 || cc == 6 || cc == 7;                           // encoders / strip: not mapped yet
+            const int rel = v == 0 ? 0 : (v < 64 ? v : v - 128);           // relative knobs: 1..63 up, 127..64 down
+            if (cc == 3) { setFromAudio(P.vol, mpc::clamp(get(P.vol) + 0.5f * (float)rel, -40.0f, 6.0f)); return true; }
+            if (cc == 6) { if (rel != 0) scStyleStep(layer, rel > 0 ? 1 : -1); return true; }
+            return cc == 7;
         }
-        const bool on = ev.isNoteOn() && ev.data[2] == 127, off = ev.isNoteOff() && (ev.data[2] == 64 || ev.status() == 0x80);
+        const bool on = ev.isNoteOn(), off = ev.isNoteOff();
         if (!on && !off) return false;
         const int n = ev.note();
-        const bool scKey = n <= 30 || (n >= 32 && n <= 39) || n == 52 || n == 53;
-        if (!scKey) return false;
+        if (!scKeyNote(n)) return false;
+        if (n == 26) { scShift_[layer] = on; return true; }
+        if (n == 40) { scTouch_[layer] = on; scTouchSeen_ = true; return true; }
+        if (n == 20) { if (on) { cutHeld_ = true; cutDeck_ = layer; } else if (cutDeck_ == layer) cutHeld_ = false; return true; }
+        if (n == 24 || n == 25)                                              // pitch bend buttons: while held
+        {
+            if (on) { scNudge_[layer] = n == 24 ? -1 : 1; setFromAudio(P.pitch, mpc::clamp(scPitchBase_[layer] + (n == 24 ? -40.0f : 40.0f), -100.0f, 100.0f)); }
+            else { scNudge_[layer] = 0; setFromAudio(P.pitch, scPitchBase_[layer]); }
+            return true;
+        }
+        if (n >= 32 && n <= 39 && off)
+        {
+            if (scPadMode_[layer] == 1 && scRollPad_[layer] == n - 32 && recOf(D) != nullptr)   // ROLL: back where the record would be
+            {
+                const Record* r = recOf(D);
+                const double back = scRollFrom_[layer] + (blockClock_ - scRollClock_[layer]) / sr_ * r->sampleRate * (getBool(P.reverse) ? -1.0 : 1.0);
+                if (layer == activeDeck_) jumpTo(D, back); else D.x = back;
+                scRollPad_[layer] = -1;
+            }
+            return true;
+        }
         if (!on) return true;
-        if (n == 1)                                                          // PLAY: start / stop the deck
+        const bool sh = scShift_[layer];
+        const Record* rec = recOf(D);
+        const double len = rec != nullptr ? (double)rec->length : 0.0;
+        auto jump = [&](double pos) {
+            if (len > 0.0) pos = std::fmod(std::fmod(pos, len) + len, len);
+            if (layer == activeDeck_) jumpTo(D, pos); else D.x = pos;
+        };
+        switch (n)
         {
-            setFromAudio(deckP_[layer].play, getBool(deckP_[layer].play) ? 0.0f : 1.0f);
-            refreshMotors();
+            case 1:
+                if (sh) { scSetBool(P.play, false); D.vel = 0.0; }
+                else scSetBool(P.play, !getBool(P.play));
+                refreshMotors();
+                break;
+            case 2:
+                if (sh) D.cue[D.cur] = D.x;
+                else jump(D.cue[D.cur]);
+                break;
+            case 3: case 4: if (rec != nullptr) jump(D.x + (n == 3 ? -1.0 : 1.0) * rec->sampleRate); break;
+            case 5: case 6:
+                if (sh) scStyleStep(layer, n == 5 ? -1 : 1);
+                else setFromAudio(P.slot, (float)((getInt(P.slot) + (n == 5 ? kSlots - 1 : 1)) % kSlots));
+                break;
+            case 7: scSetBool(P.reverse, !getBool(P.reverse)); break;
+            case 8: case 10: scSetBool(P.loop, !getBool(P.loop)); break;
+            case 9: scSetBool(P.loop, false); break;
+            case 18: setFromAudio(kLayout, (float)((getInt(kLayout) + 1) % 3)); break;
+            case 19: setFromAudio(kPlatMode, getInt(kPlatMode) == 1 ? 0.0f : 1.0f); break;
+            case 21: scSetBool(kHoldLatch, !getBool(kHoldLatch)); break;
+            case 22: setFromAudio(P.prange, (float)((getInt(P.prange) + 1) % 3)); break;
+            case 23: scSetBool(kSlip, !getBool(kSlip)); break;
+            case 27: case 28: case 29: case 30: scPadMode_[layer] = n == 27 ? 0 : n == 28 ? 1 : n == 29 ? 2 : 3; break;
+            case 52: setFromAudio(P.speed, 0.0f); break;
+            case 53: setFromAudio(P.speed, 1.0f); break;
+            default:
+                if (n >= 32 && n <= 39)
+                {
+                    const int k = n - 32;
+                    if (layer != activeDeck_) setFromAudio(kDeck, (float)layer);
+                    if (sh && scPadMode_[layer] != 3) { setFromAudio(P.style, (float)std::min(k, kNumStyles - 1)); break; }
+                    if (scPadMode_[layer] == 0) setFromAudio(P.slot, (float)k);
+                    else if (scPadMode_[layer] == 2) { if (len > 0.0) jump(len * k / 8.0); }
+                    else if (scPadMode_[layer] == 1) { if (len > 0.0) { scRollFrom_[layer] = D.x; scRollClock_[layer] = blockClock_; scRollPad_[layer] = k; jump(len * k / 8.0); } }
+                    else
+                    {
+                        double& m = scMem_[layer][D.cur][k];
+                        if (sh) m = -1.0; else if (m < 0.0) m = D.x; else jump(m);
+                    }
+                }
+                break;
         }
-        else if (n == 2)                                                     // CUE: back to the start of the record
-        {
-            if (layer == activeDeck_) jumpTo(deck_[layer], 0.0);
-            else { deck_[layer].x = 0.0; }
-        }
-        else if (n >= 32 && n <= 39)                                         // pads 1-8: the 8 records of this deck
-        {
-            setFromAudio(deckP_[layer].slot, (float)(n - 32));
-            if (layer != activeDeck_) setFromAudio(kDeck, (float)layer);
-        }
+        readLater_ = true;
         return true;
     }
 
@@ -1479,6 +1644,18 @@ private:
             int v = platMsb_[layer] * 128 + ev.data[2];
             if (v >= 8192) v -= 16384;
             counts = v;
+            rawCount_[layer].fetch_add(v, std::memory_order_relaxed);
+            // free-running check (motor turns it, no hand): 25 ms windows against the measured motor speed
+            platWinCounts_[layer] += v;
+            if (platWinStart_[layer] < 0.0) platWinStart_[layer] = eventClock_;
+            const double winLen = eventClock_ - platWinStart_[layer];
+            if (winLen >= 0.025 * sr_)
+            {
+                const float cal = calCps_.load(std::memory_order_relaxed);
+                const double rate = platWinCounts_[layer] / (winLen / sr_) * (double)calSign_.load(std::memory_order_relaxed);
+                platFree_[layer] = cal > 100.0f && std::fabs(rate / (double)cal - 1.0) < 0.06;
+                platWinCounts_[layer] = 0.0; platWinStart_[layer] = eventClock_;
+            }
         }
         else
         {
@@ -1500,7 +1677,11 @@ private:
             }
         }
         if (layer != activeDeck_) { setFromAudio(kDeck, (float)layer); return true; }   // layer switched on the SC6000M
-        const double turns = counts * (double)platDec_.turnsPerCount.load(std::memory_order_relaxed);
+        // LERNEN with the touch strip as input: the platter does not move the record during a lesson
+        if (teacher_.running && learnInput() == 1) return true;
+        double turns = counts * (double)platDec_.turnsPerCount.load(std::memory_order_relaxed);
+        // REVERSE in MOTOR mode: the platter keeps turning forward, the record plays backwards (like Serato)
+        if (scActive() && getInt(kPlatMode) == 1 && getBool(deckP_[activeDeck_].reverse)) turns = -turns;
         platTurns_.store(platTurns_.load(std::memory_order_relaxed) + turns, std::memory_order_relaxed);
         // the real platter's speed is the reference: 1 turn at 33 1/3 (or 45) = exactly the record at normal speed,
         // whatever turntable is chosen in the plugin
@@ -1508,7 +1689,7 @@ private:
         const Record* rec = recOf(D);
         const double platRpm = getInt(kPlatRpm) == 1 ? 45.0 : 100.0 / 3.0;
         double pitchMul = 1.0;
-        if (getInt(kCtrlProfile) == 1 && getInt(kPlatMode) == 1)
+        if (scActive() && getInt(kPlatMode) == 1)
         {
             static const double ranges[3] = {0.08, 0.16, 0.50};
             const DeckParams& P = deckP_[activeDeck_];
@@ -1667,7 +1848,10 @@ private:
             {
                 const Record* r = recOf(act);
                 const bool aud = act.audible * act.cutGain > 0.5f;
-                const float c = teacher_.tick(act.x, act.vel, act.handActive && handSrc_ != kSrcHelper, aud, act.motorOn, act.stripScale, r != nullptr, sr_);
+                bool handOn = act.handActive && handSrc_ != kSrcHelper;
+                if (handOn && handSrc_ == kSrcJog && scActive() && getInt(kPlatMode) == 1)
+                    handOn = scTouchSeen_ ? scTouch_[activeDeck_] : !platFree_[activeDeck_];
+                const float c = teacher_.tick(act.x, act.vel, handOn, aud, act.motorOn, act.stripScale, r != nullptr, sr_);
                 if (teacher_.tempoUp) { teacher_.tempoUp = false; setFromAudio(kHBpm, std::min(110.0f, get(kHBpm) + 6.0f)); }
                 outL += c; outR += c;
             }
@@ -2215,7 +2399,7 @@ private:
     // learn the platter from a step where it turned a known amount
     bool learnPlatter(double expectedTurns, bool perSecond)
     {
-        if (getInt(kCtrlProfile) == 1) return true;      // the SC6000M profile is fixed, nothing to learn
+        if (scActive()) return true;      // the SC6000M profile is fixed, nothing to learn
         const skr::KeyStat* best = nullptr;
         for (const skr::KeyStat& k : mon_.stats)
         {
@@ -2401,7 +2585,7 @@ private:
             const double t = platTurns_.load();
             std::string sp;
             {
-                const std::string want = getInt(kCtrlProfile) == 1 ? std::string("SC6000M-PROFIL: 3600 SCHRITTE/U") : std::string();
+                const std::string want = scActive() ? std::string("SC6000M-PROFIL: 3600 SCHRITTE/U") : std::string();
                 if (!want.empty())
                 {
                     bool c2;
@@ -2745,6 +2929,8 @@ private:
             std::this_thread::sleep_for(std::chrono::milliseconds(15));
             ++tick;
             if (rescanDone_.exchange(false) && getBool(kRescan)) { set(kRescan, 0.0f); notify(kRescan); }
+            // language switched: every value and text is shown again (translated by formatValue)
+            { static thread_local int lastLang = -1; const int lg = getInt(kLang); if (lg != lastLang) { if (lastLang >= 0) for (int i = 0; i < kNumParams; ++i) if (i != kLang) notify(i); lastLang = lg; } }
 
             // ---- browser: tap a row, double tap / OPEN to go in, step keys, sliders, Q-Links ----
             const int nF = numFolders_.load();
@@ -3123,6 +3309,29 @@ private:
     std::atomic<int> loadRequest_{0};
     std::atomic<bool> rescanRequested_{false}, needDisplayUpdate_{false}, stopThread_{false};
     std::thread worker_, loader_, scanner_, motor_;
+    // ---- 2.9: SC6000M through SKRATCHA's own sequencer client ----
+    skr::MidiRing seqRing_;                          // controller thread -> audio thread
+    std::atomic<bool> seqLive_{false}, scPresent_{false};
+    bool seqActive_ = false;
+    double seqNoteClock_[512] = {};
+    struct HeldNote { bool used = false; mpc::MidiEvent ev; int key = 0; double until = 0.0; };
+    HeldNote heldHost_[16];
+    std::atomic<long long> rawCount_[2] = {{0}, {0}};
+    std::atomic<float> calCps_{0.0f};                 // measured counts per second of the free-running motor
+    std::atomic<int> calSign_{1};
+    double platWinCounts_[2] = {0.0, 0.0}, platWinStart_[2] = {-1.0, -1.0};
+    bool platFree_[2] = {false, false}, scTouch_[2] = {false, false}, scTouchSeen_ = false;
+    bool scShift_[2] = {false, false};
+    std::atomic<int> scPadMode_[2] = {{0}, {0}};
+    int scNudge_[2] = {0, 0}, scRollPad_[2] = {-1, -1};
+    float scPitchBase_[2] = {0.0f, 0.0f};
+    double scRollFrom_[2] = {0.0, 0.0}, scRollClock_[2] = {0.0, 0.0};
+    double scMem_[2][kSlots][8];
+    std::atomic<uint32_t> loadedMask_[2] = {{0}, {0}};    // which slots hold a record (for the pad LEDs)
+    std::atomic<int> curSlot_[2] = {{0}, {0}}, liveSlice_[2] = {{-1}, {-1}};
+    std::atomic<bool> cutLive_[2] = {{false}, {false}};
+    int learnInput() { const int v = getInt(kLearnIn); return v == 0 ? (scActive() ? 2 : 1) : v; }
+    bool scActive() { return getInt(kCtrlProfile) == 1 || (getBool(kCtrlAuto) && scPresent_.load(std::memory_order_relaxed)); }
     std::atomic<uint32_t> platFrames_{0};
 
     // ---------------- SC6000M motor search ----------------
@@ -3165,42 +3374,137 @@ private:
         closedir(d);
         return found;
     }
+    // ---------------------------------------------------------------------------------------------------------
+    // controller thread: SKRATCHA's own ALSA sequencer client to the SC6000M.
+    //  - finds the SC6000M by name (again after re-plugging) -> AUTO uses it at once
+    //  - reads everything it sends (independent of the track's MIDI input) -> audio thread via a lock-free ring
+    //  - the real motor: PLAY = CC 65 (127), stop = CC 66 (127, 0); measures the free-running speed once it runs
+    //  - the LEDs: buttons 0 off / 1 dim / 127 on, pads + platter ring = colour index (1 + RRGGBB, 2 bits each)
+    // ---------------------------------------------------------------------------------------------------------
+    static int scColour(int r, int g, int b) { return 1 + ((r & 3) << 4 | (g & 3) << 2 | (b & 3)); }
     void motorLoop()
     {
+        using clk = std::chrono::steady_clock;
         bool last = false, lastStop = false;
-        // 2.8: the real SC6000M motor. Platter Mode MOTOR + Controller SC6000M: PLAY starts the motor of that layer
-        // (CC 65 = 127), stop stops it (CC 66 = 127/0). Layer A = MIDI channel 1, layer B = channel 2.
-        skrseq::Client mot;
+        skrseq::Client sq;
         int motState[2] = {-1, -1};
-        int retryWait = 0;
+        int led[2][128];
+        auto ledReset = [&] { for (auto& l : led) for (int& v : l) v = -1; };
+        ledReset();
+        clk::time_point nextScan = clk::now(), nextLedRefresh = clk::now(), nextTick = clk::now();
+        int calPhase[2] = {0, 0}; clk::time_point calT[2]; long long calA[2] = {0, 0};
+        bool present = false;
         auto motSend = [&](int layer, bool run) {
-            if (run) mot.cc(layer, 65, 127);
-            else { mot.cc(layer, 66, 127); mot.cc(layer, 66, 0); }
+            if (run) sq.cc(layer, 65, 127);
+            else { sq.cc(layer, 66, 127); sq.cc(layer, 66, 0); }
             motState[layer] = run ? 1 : 0;
         };
-        auto motAllOff = [&] {
-            if (mot.fd >= 0) for (int l = 0; l < 2; ++l) if (motState[l] == 1) motSend(l, false);
-            mot.close(); motState[0] = motState[1] = -1;
+        auto allOff = [&] {
+            if (sq.fd >= 0 && sq.haveDev)
+            {
+                for (int l = 0; l < 2; ++l) { if (motState[l] == 1) motSend(l, false); for (int n = 0; n < 128; ++n) if (led[l][n] > 0) sq.note(l, n, 0); }
+            }
+            motState[0] = motState[1] = -1; ledReset();
         };
+        auto setLed = [&](int l, int n, int v) { if (led[l][n] != v) { led[l][n] = v; v > 0 ? sq.note(l, n, v) : sq.note(l, n, 0); } };
         while (!stopThread_.load())
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            const bool motorMode = getInt(kCtrlProfile) == 1 && getInt(kPlatMode) == 1;
-            if (motorMode && !getBool(kMotorScan) && !getBool(kStopScan))
+            const auto now = clk::now();
+            const bool want = getBool(kCtrlAuto) || getInt(kCtrlProfile) == 1;
+            if (!want)
             {
-                if (mot.fd < 0 && --retryWait <= 0)
-                {
-                    if (!mot.open("SC6000")) { mot.close(); retryWait = 150; setText(platInfo_, "MOTOR: SC6000M NICHT GEFUNDEN", kPlatInfo); }
-                    else setText(platInfo_, "ECHTER MOTOR AKTIV: PLAY = MOTOR AN", kPlatInfo);
-                }
-                if (mot.fd >= 0)
-                    for (int l = 0; l < 2; ++l)
-                    {
-                        const int want = getBool(deckP_[l].play) ? 1 : 0;
-                        if (want != motState[l]) motSend(l, want == 1);
-                    }
+                if (sq.fd >= 0) { allOff(); sq.close(); }
+                seqLive_.store(false); scPresent_.store(false); present = false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
-            else if (mot.fd >= 0) motAllOff();
+            else
+            {
+                if (sq.fd < 0 && now >= nextScan) { sq.open("SC6000"); nextScan = now + std::chrono::seconds(2); present = sq.haveDev; }
+                else if (sq.fd >= 0 && now >= nextScan)
+                {
+                    const bool p = sq.findDevice("SC6000");
+                    if (p && !present) { ledReset(); motState[0] = motState[1] = -1; }
+                    present = p; nextScan = now + std::chrono::seconds(2);
+                }
+                scPresent_.store(present);
+                seqLive_.store(present && sq.listening, std::memory_order_release);
+                // read what arrived (wait up to 4 ms for it)
+                if (sq.fd >= 0 && sq.listening)
+                {
+                    pollfd pfd{sq.fd, POLLIN, 0};
+                    ::poll(&pfd, 1, 4);
+                    sq.readMidi([&](uint8_t a, uint8_t b, uint8_t c) { skr::MidiRec r; r.clock = 0; r.n = 3; r.b[0] = a; r.b[1] = b; r.b[2] = c; seqRing_.push(r); });
+                }
+                else std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            }
+            if (now < nextTick) continue;
+            nextTick = now + std::chrono::milliseconds(20);
+
+            const bool scanning = getBool(kMotorScan) || getBool(kStopScan);
+            if (present && sq.haveDev && !scanning && scActive())
+            {
+                // the motor
+                const bool motorMode = getInt(kPlatMode) == 1;
+                for (int l = 0; l < 2; ++l)
+                {
+                    const int wantRun = motorMode && getBool(deckP_[l].play) ? 1 : 0;
+                    if (wantRun != motState[l])
+                    {
+                        motSend(l, wantRun == 1);
+                        if (wantRun) { calPhase[l] = 1; calT[l] = now; } else calPhase[l] = 0;
+                        setText(platInfo_, motorMode ? (wantRun ? "ECHTER MOTOR: LAEUFT" : "ECHTER MOTOR: STEHT") : "TELLER = HAND (OHNE MOTOR)", kPlatInfo);
+                    }
+                    // measure the free-running speed: 0.9 s spin-up, then 1 s
+                    if (calPhase[l] == 1 && now - calT[l] >= std::chrono::milliseconds(900)) { calA[l] = rawCount_[l].load(); calT[l] = now; calPhase[l] = 2; }
+                    else if (calPhase[l] == 2 && now - calT[l] >= std::chrono::milliseconds(1000))
+                    {
+                        const double secs = std::chrono::duration<double>(now - calT[l]).count();
+                        const double cps = (double)(rawCount_[l].load() - calA[l]) / secs;
+                        calPhase[l] = 0;
+                        if (std::fabs(cps) > 1500.0 && std::fabs(cps) < 3300.0)
+                        {
+                            calCps_.store((float)std::fabs(cps)); calSign_.store(cps < 0 ? -1 : 1);
+                            setText(platInfo_, fmt("MOTOR %.1f U/MIN: TEMPO EXAKT", std::fabs(cps) / 3600.0 * 60.0), kPlatInfo);
+                        }
+                    }
+                }
+                // the LEDs (all of them again every 3 s: the SC6000M may redraw on a layer switch)
+                if (now >= nextLedRefresh) { ledReset(); nextLedRefresh = now + std::chrono::seconds(3); }
+                for (int l = 0; l < 2; ++l)
+                {
+                    const DeckParams& P = deckP_[l];
+                    const bool play = getBool(P.play), rev = getBool(P.reverse), loop = getBool(P.loop);
+                    const int mode = scPadMode_[l].load();
+                    setLed(l, 1, play ? 127 : 1);
+                    setLed(l, 2, 1);
+                    for (int n : {3, 4, 5, 6, 18, 24, 25}) setLed(l, n, 1);
+                    setLed(l, 7, rev ? 127 : 1);
+                    setLed(l, 8, loop ? 127 : 1); setLed(l, 9, loop ? 127 : 1); setLed(l, 10, loop ? 127 : 1);
+                    setLed(l, 19, motorMode ? 127 : 1);
+                    setLed(l, 20, cutLive_[l].load() ? 127 : 1);
+                    setLed(l, 21, getBool(kHoldLatch) ? 127 : 1);
+                    setLed(l, 22, getInt(P.prange) > 0 ? 127 : 1);
+                    setLed(l, 23, getBool(kSlip) ? 127 : 1);
+                    setLed(l, 26, scShift_[l] ? 127 : 1);
+                    for (int m = 0; m < 4; ++m) setLed(l, 27 + m, mode == m ? 127 : 1);
+                    const float pitch = get(P.pitch);
+                    setLed(l, 41, pitch < -0.6f ? 127 : 0); setLed(l, 42, std::fabs(pitch) <= 0.6f ? 127 : 0); setLed(l, 43, pitch > 0.6f ? 127 : 0);
+                    const int full = l == 0 ? scColour(3, 1, 0) : scColour(0, 2, 3), dim = l == 0 ? scColour(1, 0, 0) : scColour(0, 0, 1);
+                    const uint32_t mask = loadedMask_[l].load(); const int cur = curSlot_[l].load(), slice = liveSlice_[l].load();
+                    for (int k = 0; k < 8; ++k)
+                    {
+                        int c = 1;
+                        if (mode == 0) c = k == cur ? full : ((mask >> k) & 1u) ? dim : 1;
+                        else if (mode == 2) c = k == slice ? scColour(3, 0, 3) : scColour(1, 0, 1);
+                        else if (mode == 1) c = k == scRollPad_[l] ? scColour(0, 3, 0) : scColour(0, 1, 0);
+                        else c = scMem_[l][cur & 7][k] >= 0.0 ? scColour(3, 3, 0) : 1;
+                        setLed(l, 32 + k, c);
+                    }
+                    setLed(l, 40, rev ? scColour(3, 0, 0) : full);
+                }
+            }
+            else if (present && sq.haveDev && !scanning && !scActive()) allOff();
+
             const bool on = getBool(kMotorScan);
             if (on && !last) runMotorScan();
             last = on;
@@ -3208,75 +3512,74 @@ private:
             if (st && !lastStop) runStopScan();
             lastStop = st;
         }
-        motAllOff();
+        allOff();
+        seqLive_.store(false);
     }
-    // start the motor with CC 65 = 127, then try candidates until the platter stops; verify by starting/stopping again
+    // 2.9 BEFEHLE SUCHEN: with the motor running (CC 65), every other controller and note is tried; the signed
+    // platter speed shows what it did: STOP / REVERSE (direction flips) / FASTER (45?) / SLOWER.
+    // After a hit the motor is set back (CC 66, CC 65). Log: /tmp/sc-motor-befehle.log
     void runStopScan()
     {
         std::string log;
         auto stamp = [] { char b[16]; std::time_t t = std::time(nullptr); std::strftime(b, sizeof(b), "%H:%M:%S ", std::localtime(&t)); return std::string(b); };
-        auto save = [&] { if (FILE* f = std::fopen("/tmp/sc-motor-stop.log", "w")) { std::fputs(log.c_str(), f); std::fclose(f); } };
+        auto save = [&] { if (FILE* f = std::fopen("/tmp/sc-motor-befehle.log", "w")) { std::fputs(log.c_str(), f); std::fclose(f); } };
         auto say = [&](const std::string& m) { log += stamp() + m + "\n"; save(); };
         auto show = [&](const std::string& m) { setText(platInfo_, m, kPlatInfo); };
         auto aborted = [&] { return stopThread_.load() || !getBool(kStopScan); };
-        say("SKRATCHA Motor-STOP-Suche");
+        auto sfmt = [](const char* f, auto... v) { char buf[200]; std::snprintf(buf, sizeof(buf), f, v...); return std::string(buf); };
+        say("SKRATCHA Motor-Befehle-Suche (Richtung, Tempo, Stop)");
         skrseq::Client sq;
-        const bool okSeq = sq.open("SC6000");
-        if (!okSeq) { log += sq.log; say("FEHLER: SC6000M im Sequencer nicht gefunden"); show("STOP: SC6000M NICHT GEFUNDEN"); return; }
-        say("Ziel " + std::to_string(sq.dev.client) + ":" + std::to_string(sq.dev.port) + (sq.listening ? " (mithoeren OK)" : " (mithoeren GEHT NICHT)"));
-        auto rateMs = [&](int ms) {
-            sq.drainPlatter(); int own = 0; const uint32_t a = platFrames_.load();
-            for (int i = 0; i < ms / 50 && !aborted(); ++i) { std::this_thread::sleep_for(std::chrono::milliseconds(50)); own += sq.drainPlatter(); }
-            return (int)((int64_t)std::max((int)(platFrames_.load() - a), own) * 1000 / std::max(ms, 1));
+        if (!sq.open("SC6000")) { log += sq.log; say("FEHLER: SC6000M im Sequencer nicht gefunden"); show("BEFEHLE: SC6000M NICHT GEFUNDEN"); return; }
+        auto speed = [&](int ms) {      // signed counts per second
+            sq.drainSigned(); int sum = 0;
+            for (int i = 0; i < ms / 50 && !aborted(); ++i) { std::this_thread::sleep_for(std::chrono::milliseconds(50)); sum += sq.drainSigned(); }
+            return (double)sum * 1000.0 / std::max(ms, 1);
         };
-        const int th = 300;
-        auto spinning = [&] { return rateMs(1000) > th; };
-        // 1. start
-        sq.cc(0, 65, 127);
-        bool up = false;
-        for (int i = 0; i < 6 && !aborted() && !up; ++i) up = spinning();
-        if (aborted()) { say("ABGEBROCHEN"); show("STOP-SUCHE ABGEBROCHEN"); return; }
-        if (!up) { say("FEHLER: CC 65 = 127 startet den Motor nicht (oder Teller-Daten kommen nicht an)"); show("STOP: MOTOR LAEUFT NICHT AN"); return; }
-        say("Motor laeuft (CC 65 = 127).");
-        struct Cand { int kind, num, on, off; std::string name; };   // kind 0 = CC, 1 = note; off < 0: no second message
+        auto restart = [&] { sq.cc(0, 66, 127); sq.cc(0, 66, 0); std::this_thread::sleep_for(std::chrono::milliseconds(600)); sq.cc(0, 65, 127); std::this_thread::sleep_for(std::chrono::milliseconds(1200)); };
+        restart();
+        double base = speed(1000);
+        if (std::fabs(base) < 800.0) { say(sfmt("FEHLER: Motor laeuft nicht an (%.0f/s)", base)); show("BEFEHLE: MOTOR LAEUFT NICHT AN"); return; }
+        say(sfmt("Motor laeuft: %.0f Schritte/s (vorwaerts = %s)", base, base > 0 ? "positiv" : "negativ"));
+        struct Cand { int kind, num; };
         std::vector<Cand> c;
-        c.push_back({0, 65, 127, -1, "CC 65 = 127 nochmal"});
-        c.push_back({0, 65, 0, -1, "CC 65 = 0"});
-        for (int v = 1; v <= 126; ++v) c.push_back({0, 65, v, -1, "CC 65 = " + std::to_string(v)});
-        for (int n = 0; n <= 119; ++n) if (n != 65) c.push_back({0, n, 127, 0, "CC " + std::to_string(n) + " 127/0"});
-        for (int n = 0; n <= 127; ++n) c.push_back({1, n, 127, 0, "NOTE " + std::to_string(n)});
-        c.push_back({2, 65, 127, -1, "CC 65 = 127 KANAL 2"});
-        c.push_back({2, 65, 0, -1, "CC 65 = 0 KANAL 2"});
-        auto fire = [&](const Cand& k, bool second) {
-            const int v = second ? k.off : k.on; if (v < 0) return;
-            const int ch = k.kind == 2 ? 1 : 0;
-            if (k.kind == 1) sq.note(ch, k.num, v); else sq.cc(ch, k.num, v);
-        };
-        int found = -1;
+        for (int n = 0; n <= 119; ++n) if (n != 65 && n != 66) c.push_back({0, n});
+        for (int n = 0; n <= 127; ++n) c.push_back({1, n});
+        int hits = 0; std::string hitList;
         for (size_t i = 0; i < c.size() && !aborted(); ++i)
         {
-            char t[64]; std::snprintf(t, sizeof(t), "STOP SUCHT: %s", c[i].name.c_str()); show(t);
-            fire(c[i], false); fire(c[i], true);
-            rateMs(500);                                   // braking time
-            const int r1 = rateMs(1000), r2 = rateMs(1000);
-            say(c[i].name + ": " + std::to_string(r1) + " / " + std::to_string(r2));
-            if (r2 <= th && r1 < 3000) { found = (int)i; break; }
-            if (r2 <= th) continue;                         // should not happen
+            const Cand& k = c[i];
+            const std::string nm = (k.kind == 0 ? "CC " : "NOTE ") + std::to_string(k.num);
+            show(sfmt("BEFEHLE SUCHT: %s  TREFFER %d", nm.c_str(), hits));
+            if (k.kind == 0) sq.cc(0, k.num, 127); else sq.note(0, k.num, 127);
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+            if (k.kind == 0) sq.cc(0, k.num, 0); else sq.note(0, k.num, 0);
+            speed(450);
+            const double r = speed(1000);
+            const double q = r / base;
+            std::string what;
+            if (std::fabs(q) < 0.25) what = "STOP";
+            else if (q < -0.25) what = "RUECKWAERTS";
+            else if (q > 1.2) what = sfmt("SCHNELLER x%.2f", q);
+            else if (q < 0.85) what = sfmt("LANGSAMER x%.2f", q);
+            say(sfmt("%s: %.0f/s", nm.c_str(), r) + (what.empty() ? "" : "  <<< " + what));
+            if (what.empty()) continue;
+            ++hits; hitList += " " + nm + "=" + what;
+            restart();
+            const double b2 = speed(1000);
+            if (b2 / base < 0.85)
+            {
+                say(sfmt("  nach Neustart %.0f/s - Befehl nochmal senden (Umschalter?)", b2));
+                if (k.kind == 0) { sq.cc(0, k.num, 127); sq.cc(0, k.num, 0); } else { sq.note(0, k.num, 127); sq.note(0, k.num, 0); }
+                std::this_thread::sleep_for(std::chrono::milliseconds(800));
+                restart();
+                const double b3 = speed(1000);
+                say(sfmt("  danach %.0f/s", b3));
+                if (b3 / base < 0.85) { say("Motor nicht zurueckgesetzt -> Suche stoppt. SC6000M aus/an schalten."); break; }
+            }
         }
-        if (aborted()) { say("ABGEBROCHEN"); show("STOP-SUCHE ABGEBROCHEN"); sq.cc(0, 65, 0); return; }
-        if (found < 0) { say("KEIN STOP-BEFEHL GEFUNDEN. Motor laeuft noch: SC6000M aus/an schalten."); show("STOP: NICHTS GEFUNDEN (SC6000M AUS/AN)"); return; }
-        const Cand& k = c[(size_t)found];
-        say("TREFFER STOP: " + k.name);
-        // 2. verify: start again, stop again
-        sq.cc(0, 65, 127); bool up2 = false;
-        for (int i = 0; i < 6 && !aborted() && !up2; ++i) up2 = spinning();
-        say(std::string("Pruefung: Neustart mit CC 65 = 127 -> ") + (up2 ? "laeuft" : "laeuft NICHT"));
-        fire(k, false); fire(k, true); rateMs(1500);
-        const bool down2 = !spinning();
-        say(std::string("Pruefung: ") + k.name + " -> " + (down2 ? "steht" : "dreht weiter"));
-        show("STOP TREFFER: " + k.name + (up2 && down2 ? " (GEPRUEFT)" : ""));
-        if (!down2) say("Motor laeuft eventuell noch: SC6000M aus/an schalten.");
-        say("FERTIG");
+        sq.cc(0, 66, 127); sq.cc(0, 66, 0);
+        say(std::string(aborted() ? "ABGEBROCHEN" : "FERTIG") + ". Treffer: " + std::to_string(hits) + hitList);
+        show(hits ? "BEFEHLE GEFUNDEN:" + hitList : std::string(aborted() ? "BEFEHLE-SUCHE ABGEBROCHEN" : "BEFEHLE: NICHTS NEUES"));
     }
 
     void runMotorScan()

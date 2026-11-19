@@ -156,6 +156,12 @@ def deck_maps(style, design=None):
     leadin = PB.ring(r, (R_LP - 5) * S, R_LP * S, 0.8)
     runout = PB.ring(r, (R_LAB + 4) * S, 104 * S, 1.2)
     grooves = PB.radial_value(r, 35, scale=1.8, amp=1.0, smooth=1) * (1 - gap) * (1 - runout) * (1 - leadin) * 0.05 * S
+    # 2.9: the music in the grooves - loud passages scatter more light (wider, rougher), quiet ones are glossy and
+    # dark; plus a much finer micro-groove texture and a few specks of dust
+    dyn = PB.radial_value(r, 77, scale=0.9, amp=1.0, smooth=9)
+    dyn = _np.clip(0.5 + dyn * 0.9, 0.0, 1.0) * (1 - gap) * (1 - runout) * (1 - leadin)
+    micro = PB.radial_value(r, 78, scale=2.5, amp=1.0, smooth=2) * 0.0035 * S * (0.4 + dyn)
+    grooves = grooves * (0.55 + 0.9 * dyn) + micro * (1 - runout) * (1 - leadin)
     vcol = PB.srgb_to_lin(vin["col"])
     _put(A, Hm, Rm, Mm, lp, vcol, None, vin["rough"], 0.0)
     if vin["kind"] == "marble":
@@ -173,7 +179,10 @@ def deck_maps(style, design=None):
         sp = (PB.blur(PB.white(Ww, Hw, 63), 1.6 * S) > 0.085).astype(_np.float32) * lp
         c2 = PB.srgb_to_lin(vin["col2"])
         A[:] = A * (1 - sp[..., None]) + c2[None, None, :] * sp[..., None]
-    Rm[:] = Rm * (1 - lp) + lp * (vin["rough"] - 0.01 + 0.10 * (1 - gap) * (1 - runout) * (1 - leadin) - 0.06 * runout)
+    Rm[:] = Rm * (1 - lp) + lp * (vin["rough"] - 0.03 + 0.07 * (1 - gap) * (1 - runout) * (1 - leadin) + 0.08 * dyn - 0.06 * runout)
+    dust = (PB.white(Ww, Hw, 79) > 3.6).astype(_np.float32) * lp
+    dust = PB.blur(dust, 0.5 * S)
+    A[:] = A + (dust * 0.5)[..., None] * _np.array([0.6, 0.6, 0.62], _np.float32)
     rim = PB.smoothstep((R_LP - 2.5) * S, R_LP * S, r)
     hlp = Z_LP * S - rim ** 2 * 1.6 * S + grooves - leadin * 0.25 * S
     # label (raised a little), red paper; the turning print is the label film strip
@@ -281,7 +290,7 @@ def deck_maps(style, design=None):
         (1036 * S, 476 * S, "CROSSFADER", f12, "mm", 2 * S),
     ]
     deck_ink = []
-    an = (lip + step) * 0.8 + band * 0.4 + ringo * (1 - well) * 0.7 + lp * (1 - lab) * (1 - gap * 0.85) * (1 - runout) * 0.9
+    an = (lip + step) * 0.8 + band * 0.4 + ringo * (1 - well) * 0.7 + lp * (1 - lab) * (1 - gap * 0.85) * (1 - runout) * (0.5 + 0.55 * dyn)
     maps = {"albedo": A, "H": Hm, "rough": Rm, "metal": Mm, "aniso": an, "center": (pcx, pcy)}
     maps = O3.prepare(maps, shadow_steps=40, ao_radius=14 * S, ao_strength=0.05)
     return maps, ink, deck_ink + ink2, panel_ink
@@ -330,8 +339,13 @@ def draw_label_frames(maps, hits, design=None):
     lg = Image.open(LOGO).convert("RGBA"); lg = lg.crop(lg.getbbox())
     lh = int(98 * S); lw = int(lg.width * lh / lg.height)
     art.paste(Image.new("RGBA", (lw, lh), (255, 255, 255, 255)), (int(c - lw / 2 - 2 * S), int(c - lh / 2 - 8 * S)), lg.resize((lw, lh), Image.LANCZOS))
-    ad.ellipse([c - 80 * S, c - 80 * S, c + 80 * S, c + 80 * S], outline=(255, 255, 255, 255), width=int(1.6 * S))
-    ad.ellipse([c - 74 * S, c - 74 * S, c + 74 * S, c + 74 * S], outline=(255, 255, 255, 255), width=int(0.8 * S))
+    ad.ellipse([c - 84 * S, c - 84 * S, c + 84 * S, c + 84 * S], outline=(255, 255, 255, 255), width=int(2.6 * S))   # foil band at the edge
+    ad.ellipse([c - 79.5 * S, c - 79.5 * S, c + 79.5 * S, c + 79.5 * S], outline=(255, 255, 255, 255), width=int(0.9 * S))
+    for kd in range(72):                                                                                 # knurled dots
+        a_ = kd * 2 * math.pi / 72
+        px_, py_ = c + 76.5 * S * math.cos(a_), c + 76.5 * S * math.sin(a_)
+        ad.ellipse([px_ - 0.9 * S, py_ - 0.9 * S, px_ + 0.9 * S, py_ + 0.9 * S], fill=(255, 255, 255, 255))
+    ad.ellipse([c - 14 * S, c - 14 * S, c + 14 * S, c + 14 * S], outline=(255, 255, 255, 255), width=int(0.8 * S))  # pressing ring
     fs = font(F_BOLD, 9 * S)
     # small curved print along the bottom: SKRATCHA · 33 1/3 RPM · SIDE A
     msg = design.get("label_text", "SKRATCHA RECORDS  ·  33 1/3 RPM  ·  STEREO  ·  JJ DA PLUG")
@@ -348,6 +362,14 @@ def draw_label_frames(maps, hits, design=None):
         ad.text((c + (-44 if i == 0 else 44) * S, c + 46 * S), s_, font=font(F_BOLD, 8 * S), fill=(255, 255, 255, 255), anchor="mm")
     foil = _np.asarray(art.split()[3]).astype(_np.float32) / 255
     speck = PB.blur(PB.white(T, T, 91), 0.7 * S)
+    # paper: fibres + a radial light/dark gradient + fine concentric pressing marks (all in label coordinates)
+    gxl, gyl = _np.meshgrid(_np.arange(T, dtype=_np.float32) - T / 2, _np.arange(T, dtype=_np.float32) - T / 2)
+    rl = _np.sqrt(gxl * gxl + gyl * gyl) / S
+    fib = PB.fbm(T, T, 92, 5, 7.0 * S); fib = (fib - fib.mean()) / (fib.std() + 1e-6)
+    fib2 = PB.blur(PB.white(T, T, 93), 0.6 * S); fib2 = (fib2 - fib2.mean()) / (fib2.std() + 1e-6)
+    paper_tex = 1.0 + 0.045 * fib + 0.03 * fib2 + 0.018 * _np.sin(rl * 2 * math.pi / 1.4)
+    radial = _np.clip(rl / R_LAB, 0, 1)
+    sparkle = PB.blur(PB.white(T, T, 94), 0.45 * S); sparkle = (sparkle - sparkle.mean()) / (sparkle.std() + 1e-6)
     frames = []
     base_maps = {"albedo": maps["albedo"], "rough": maps["rough"], "metal": maps["metal"], "gx": maps["gx"], "gy": maps["gy"]}
     design = design or {}
@@ -372,10 +394,22 @@ def draw_label_frames(maps, hits, design=None):
         sp = O3.remap(speck, ux, uy, _cv2.BORDER_CONSTANT)
         paper = paper1
         if paper2 is not None:
-            gt = O3.remap(grad, ux, uy, _cv2.BORDER_REPLICATE)[..., None]
+            src = radial if design.get("radial") else grad
+            gt = O3.remap(src, ux, uy, _cv2.BORDER_REPLICATE)
+            if design.get("radial"): gt = gt ** 1.6
+            gt = gt[..., None]
             paper = paper1 * (1 - gt) + paper2 * gt
-        paper = paper * (1 + 0.05 * sp)[..., None]
-        rgb = paper * (1 - fm[..., None]) + gold * fm[..., None]
+        tex = O3.remap(paper_tex, ux, uy, _cv2.BORDER_REPLICATE)
+        vig = 1.0 - 0.16 * O3.remap(radial, ux, uy, _cv2.BORDER_REPLICATE) ** 3
+        # the foil is pressed in: soft shadow below/right of it on the paper, bright bevel top-left on the foil
+        fsh = _cv2.GaussianBlur(fm, (0, 0), 1.6 * S)
+        fsh = _np.roll(_np.roll(fsh, int(1.2 * S), 0), int(1.0 * S), 1)
+        paper = paper * (tex * vig * (1 - 0.35 * fsh * (1 - fm)) * (1 + 0.04 * sp))[..., None]
+        gyf, gxf = _np.gradient(_cv2.GaussianBlur(fm, (0, 0), 0.8 * S))
+        bevel = _np.clip(-(gxf + gyf) * 3.2 * S, -1, 1)
+        spk = O3.remap(sparkle, ux, uy, _cv2.BORDER_REPLICATE)
+        goldp = gold * (1.0 + 0.55 * _np.clip(bevel, 0, 1) - 0.35 * _np.clip(-bevel, 0, 1) + 0.10 * spk)[..., None]
+        rgb = paper * (1 - fm[..., None]) + goldp * fm[..., None]
         # spindle stays chrome (rotationally symmetric)
         spin = (rr < 4.6 * S)
         if k == 0:
@@ -607,24 +641,46 @@ def draw_info_bg():
     for g in _np.sort(PB.rng(33).uniform(118, 228, 6)):
         gap = _np.maximum(gap, _np.exp(-((rr - g) / 1.3) ** 2))
     runout = PB.ring(r, 92 * S, 106 * S, 1.5)
-    grooves = PB.radial_value(r, 35, scale=0.9, amp=1.0, smooth=1) * (1 - gap) * (1 - runout) * 0.07 * S
-    _put(A, Hm, Rm, Mm, rec, PB.srgb_to_lin([0.018, 0.018, 0.02]), None, 0.16, 0.0)
+    dyn = _np.clip(0.5 + PB.radial_value(r, 77, scale=0.9, amp=1.0, smooth=9) * 0.9, 0, 1) * (1 - gap) * (1 - runout)
+    micro = PB.radial_value(r, 78, scale=5.0, amp=1.0, smooth=1) * 0.02 * S * (0.4 + dyn)
+    grooves = PB.radial_value(r, 35, scale=0.9, amp=1.0, smooth=1) * (1 - gap) * (1 - runout) * 0.07 * S * (0.55 + 0.9 * dyn) + micro * (1 - runout)
+    _put(A, Hm, Rm, Mm, rec, PB.srgb_to_lin([0.012, 0.012, 0.016]), None, 0.16, 0.0)
     Hm[:] = Hm * (1 - rec) + rec * (8 * S + PB.dome(r - R, 2 * S, 3 * S) + grooves + PB.fbm(w, h, 36, 3, 300.0) * 1.2 * S)
-    Rm[:] = Rm * (1 - rec) + rec * (0.16 + 0.10 * (1 - gap) * (1 - runout) - 0.08 * runout)
+    Rm[:] = Rm * (1 - rec) + rec * (0.13 + 0.07 * (1 - gap) * (1 - runout) + 0.08 * dyn - 0.08 * runout)
+    # the INFO label: black-to-oxblood paper with a guilloche sunburst, a wide gold foil band and the embossed JF
     lab = PB.disc(r, 90 * S)
-    _put(A, Hm, Rm, Mm, lab, LAB_RED, None, 0.65, 0.0)
-    Hm[:] = Hm * (1 - lab) + lab * (8 * S + PB.fbm(w, h, 37, 5, 24.0) * 0.18 * S)
+    th = _np.arctan2(y - cy, x - cx)
+    rl = _np.clip(r / (90 * S), 0, 1)
+    c_in, c_out = PB.srgb_to_lin([0.30, 0.025, 0.035]), PB.srgb_to_lin([0.035, 0.012, 0.016])
+    t_ = (rl ** 1.4)[..., None]
+    lab_col = c_in[None, None, :] * (1 - t_) + c_out[None, None, :] * t_
+    fib = PB.fbm(w, h, 92, 5, 7.0 * S); fib = (fib - fib.mean()) / (fib.std() + 1e-6)
+    guil = 0.5 + 0.5 * _np.cos(th * 96 + _np.sin(rl * 9.0) * 1.4)
+    lab_col = lab_col * (1 + 0.05 * fib + 0.10 * guil * (rl > 0.18) * (rl < 0.86))[..., None]
+    A[:] = A * (1 - lab[..., None]) + lab_col * lab[..., None]
+    Rm[:] = Rm * (1 - lab) + lab * (0.55 - 0.15 * guil); Mm[:] = Mm * (1 - lab)
+    Hm[:] = Hm * (1 - lab) + lab * (8 * S + PB.fbm(w, h, 37, 5, 24.0) * 0.18 * S + guil * 0.12 * S)
     lg = Image.open(LOGO).convert("RGBA"); lg = lg.crop(lg.getbbox())
     lh = 120 * S; lw = int(lg.width * lh / lg.height)
     lgm = Image.new("L", (w, h), 0)
     lgm.paste(lg.resize((lw, lh), Image.LANCZOS).split()[3], (int(cx - lw / 2 - 4 * S), int(cy - lh / 2)))
     ringm = Image.new("L", (w, h), 0)
-    ImageDraw.Draw(ringm).ellipse([cx - 84 * S, cy - 84 * S, cx + 84 * S, cy + 84 * S], outline=255, width=int(2.2 * S))
+    rd_ = ImageDraw.Draw(ringm)
+    rd_.ellipse([cx - 86 * S, cy - 86 * S, cx + 86 * S, cy + 86 * S], outline=255, width=int(4.0 * S))
+    rd_.ellipse([cx - 79 * S, cy - 79 * S, cx + 79 * S, cy + 79 * S], outline=255, width=int(1.0 * S))
+    for kd in range(90):
+        a_ = kd * 2 * math.pi / 90
+        px_, py_ = cx + 75.5 * S * math.cos(a_), cy + 75.5 * S * math.sin(a_)
+        rd_.ellipse([px_ - 1.0 * S, py_ - 1.0 * S, px_ + 1.0 * S, py_ + 1.0 * S], fill=255)
+    rd_.ellipse([cx - 15 * S, cy - 15 * S, cx + 15 * S, cy + 15 * S], outline=255, width=int(1.0 * S))
     foil = _np.maximum(_np.asarray(lgm), _np.asarray(ringm)).astype(_np.float32) / 255
-    _put(A, Hm, Rm, Mm, foil, FOIL, None, 0.18, 1.0)
-    Hm[:] = Hm + PB.blur(foil, 0.8 * S) * 0.9 * S
+    _put(A, Hm, Rm, Mm, foil, FOIL, None, 0.16, 1.0)
+    spk = PB.blur(PB.white(w, h, 94), 0.45 * S); spk = (spk - spk.mean()) / (spk.std() + 1e-6)
+    Rm[:] = Rm * (1 - foil) + foil * _np.clip(0.14 + 0.06 * spk, 0.05, 0.4)
+    # deep emboss: the gold stands up from the paper, with a soft shadow ring around it
+    Hm[:] = Hm + PB.blur(foil, 1.2 * S) * 1.8 * S - PB.blur(foil, 3.0 * S) * 0.5 * S * (1 - foil)
     items = [(640 * S, 560 * S, "SKRATCHA  ·  CREATOR: JJ DA PLUG", font(F_BOLD, 24 * S), "mm", 3 * S),
-             (640 * S, 592 * S, "VERSION 2.8.0  ·  10 TURNTABLES  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), "mm", S)]
+             (640 * S, 592 * S, "VERSION 2.9.0  ·  10 TURNTABLES  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), "mm", S)]
     left = ["PADS = BILDSCHIRM (4 x 4)", "13 DECK A  14 DECK B  15 REV  16 SLIP", "9 CUT   10 HOLD   11 CUE   12 START",
             "1-8  SAMPLES (5-8 UEBER 1-4)", "BATTLE: LINKS A, RECHTS B (GESPIEGELT)", "HOLD + CUE = CUE SETZEN",
             "ANSICHT-TASTE = LAYOUT", "RUNDE LEUCHTE = TURNTABLE-AERA"]
@@ -636,7 +692,7 @@ def draw_info_bg():
         items.append((1246 * S, (52 + i * 30) * S, s, font(F_BOLD if i == 0 else F_MED, 16 * S), "ra", 0))
     pm = _text_mask(w, h, items)
     _put(A, Hm, Rm, Mm, pm, PAINT_WHITE, None, 0.55, 0.0)
-    an = rec * (1 - gap * 0.85) * (1 - runout) * (1 - lab) * 0.85
+    an = rec * (1 - gap * 0.85) * (1 - runout) * (1 - lab) * (0.45 + 0.55 * dyn)
     rgb, _ = PB.shade(A, Hm, Rm, Mm, shadows=True, ao=True, shadow_steps=20, ao_radius=12 * S, ao_strength=0.05, aniso=(an, cx, cy, 1.0))
     return down(PB.to_image(rgb))
 
