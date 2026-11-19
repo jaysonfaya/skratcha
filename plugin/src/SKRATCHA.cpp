@@ -179,6 +179,9 @@ public:
         kCtrlAuto,          // a connected SC6000M is used at once (profile, platter, motor) - no setup needed
         kLang,              // DEUTSCH / ENGLISH: every text on the screen
         kLearnIn,           // LERNEN input: AUTO / TOUCH STRIP / SC6000M
+        // ---- 2.9.1 ----
+        kPlatAlign,         // tap: the line on the SC6000M platter points up now -> the label stands upright there
+        kPlatZero,          // stored offset (turns) between the platter count and the upright label
         kNumParams
     };
 
@@ -191,7 +194,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2900;
+        i.version = 2910;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -397,6 +400,8 @@ public:
         addParam(fixed(boolParam("ctrlauto", "Controller Auto", true)));
         addParam(fixed(choiceParam("lang", "Language", {"DEUTSCH", "ENGLISH"}, 0)));
         addParam(fixed(choiceParam("learnin", "Learn Input", {"AUTO", "TOUCH STRIP", "SC6000M"}, 0)));
+        addParam(fixed(boolParam("platalign", "Platter Align", false)));
+        addParam(fixed(floatParam("platzero", "Platter Zero", 0.0f, 1.0f, 0.0f, "", 4)));
         if (numParams() != kNumParams) mpc::log("SKRATCHA: parameter count mismatch %d %d", numParams(), (int)kNumParams);
 
         deckP_[0] = {kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kFader, kReverse, kLoop, kAngle, kCutLed, kStrobe, kASlot, kAStyle, kAVol, kAName, kANames};
@@ -515,17 +520,34 @@ public:
         if (seqActive_)
         {
             skr::MidiRec r;
+            const uint64_t nowNs = (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            const uint64_t winStart = lastBlockNs_ != 0 && nowNs > lastBlockNs_ ? lastBlockNs_ : nowNs - (uint64_t)(ctx.numFrames / sr_ * 1e9);
+            const double winLen = std::max(1.0, (double)(nowNs - winStart));
+            lastBlockNs_ = nowNs;
+            bool jogged = false;
             while (seqRing_.pop(r))
             {
                 mpc::MidiEvent ev; ev.size = 3; ev.data[0] = r.b[0]; ev.data[1] = r.b[1]; ev.data[2] = r.b[2]; ev.sampleOffset = 0;
-                eventClock_ = blockClock_;
+                // the controller thread stamps every message with its arrival time; mapped one block late onto
+                // this block, so the gaps between platter frames stay real (no bunching at the block start)
+                const double frac = mpc::clamp(((double)r.clock - (double)winStart) / winLen, 0.0, 1.0);
+                eventClock_ = blockClock_ + frac * (double)ctx.numFrames;
+                if ((ev.data[0] & 0xF0) == 0xB0 && ev.data[1] == 54) jogged = true;
                 if ((ev.data[0] & 0xF0) == 0xB0 && (ev.data[1] == 54 || ev.data[1] == 55)) platFrames_.fetch_add(1, std::memory_order_relaxed);
                 { skr::MidiRec m = r; m.clock = (uint64_t)eventClock_; midiRing_.push(m); }
                 noteSeqSeen(ev);
                 if (!scEvent(ev, true)) platterEvent(ev);
             }
+            // spread this block's platter movement evenly over the block: constant speed, no steps
+            Deck& JD = deck_[activeDeck_];
+            if (jogged && JD.handActive && handSrc_ == kSrcJog)
+            {
+                JD.interpLeft = std::max(1, ctx.numFrames);
+                JD.interpStep = (JD.rawTarget - JD.handTarget) / (double)JD.interpLeft;
+            }
         }
         if (seqActive_) flushHeldHost();
+        { const float al = getNormalised(kPlatAlign); if (al > 0.5f && lastAlign_ <= 0.5f) { alignReq_[0] = alignReq_[1] = true; } lastAlign_ = al; if (al > 0.5f) setFromAudio(kPlatAlign, 0.0f); }
         if (scActive())
         {
             // forward on the SC6000M = positive movement (Denon: 1..63 forward, 127..64 reverse). The scale is
@@ -609,7 +631,19 @@ public:
             Deck& D = deck_[d];
             if (!std::isfinite(D.x)) { D.x = 0.0; D.handTarget = D.rawTarget = 0.0; D.interpLeft = 0; D.handVel = D.vel = 0.0; }
             const Record* r = recOf(D);
-            liveRevs_[d].store((r != nullptr ? D.x / r->sampleRate : D.x / sr_) * kRevPerSecond33 * kStyles[D.style].rpm / 33.333);
+            if (scActive() && rawSeen_[d])
+            {
+                // the picture follows the SC6000M platter itself: its own count, one turn = measured steps per turn
+                const float cal = calCps_.load(std::memory_order_relaxed);
+                const double prpm = getInt(kPlatRpm) == 1 ? 45.0 : 100.0 / 3.0;
+                const double cpr = cal > 100.0f ? (double)cal * 60.0 / prpm : 3600.0;
+                const double sign = (getInt(kPlatDir) == 1 ? -1.0 : 1.0) * (double)calSign_.load(std::memory_order_relaxed);
+                const double turns = (double)rawCount_[d].load(std::memory_order_relaxed) / cpr * sign;
+                if (alignReq_[d]) { setFromAudio(kPlatZero, (float)(turns - std::floor(turns))); alignReq_[d] = false; }
+                liveRevs_[d].store(turns - (double)get(kPlatZero));
+            }
+            else
+                liveRevs_[d].store((r != nullptr ? D.x / r->sampleRate : D.x / sr_) * kRevPerSecond33 * kStyles[D.style].rpm / 33.333);
             liveCut_[d].store(D.audible * D.cutGain > 0.3f);
             liveSlot_[d].store(D.cur);
         }
@@ -1645,15 +1679,17 @@ private:
             if (v >= 8192) v -= 16384;
             counts = v;
             rawCount_[layer].fetch_add(v, std::memory_order_relaxed);
+            rawSeen_[layer] = true;
             // free-running check (motor turns it, no hand): 25 ms windows against the measured motor speed
             platWinCounts_[layer] += v;
             if (platWinStart_[layer] < 0.0) platWinStart_[layer] = eventClock_;
             const double winLen = eventClock_ - platWinStart_[layer];
             if (winLen >= 0.025 * sr_)
             {
-                const float cal = calCps_.load(std::memory_order_relaxed);
+                const float cal0 = calCps_.load(std::memory_order_relaxed);
+                const double cal = cal0 > 100.0f ? (double)cal0 : 3600.0 * (getInt(kPlatRpm) == 1 ? 45.0 : 100.0 / 3.0) / 60.0;
                 const double rate = platWinCounts_[layer] / (winLen / sr_) * (double)calSign_.load(std::memory_order_relaxed);
-                platFree_[layer] = cal > 100.0f && std::fabs(rate / (double)cal - 1.0) < 0.06;
+                platFree_[layer] = std::fabs(rate / cal - 1.0) < 0.06;
                 platWinCounts_[layer] = 0.0; platWinStart_[layer] = eventClock_;
             }
         }
@@ -1679,6 +1715,20 @@ private:
         if (layer != activeDeck_) { setFromAudio(kDeck, (float)layer); return true; }   // layer switched on the SC6000M
         // LERNEN with the touch strip as input: the platter does not move the record during a lesson
         if (teacher_.running && learnInput() == 1) return true;
+        // MOTOR mode: while the motor turns the platter freely (nobody touches it) the record is played by
+        // SKRATCHA's own motor at exactly the normal speed - clean audio, no resampling of controller steps.
+        // As soon as a hand changes the platter speed (or touches it, when the SC6000M reports touch) the
+        // platter takes over like a hand on the record.
+        if (scActive() && getInt(kPlatMode) == 1 && getBool(deckP_[layer].play))
+        {
+            const bool handOn = scTouchSeen_ ? scTouch_[layer] : !platFree_[layer];
+            if (!handOn)
+            {
+                Deck& FD = deck_[layer];
+                if (FD.handActive && handSrc_ == kSrcJog) letGo(FD);
+                return true;
+            }
+        }
         double turns = counts * (double)platDec_.turnsPerCount.load(std::memory_order_relaxed);
         // REVERSE in MOTOR mode: the platter keeps turning forward, the record plays backwards (like Serato)
         if (scActive() && getInt(kPlatMode) == 1 && getBool(deckP_[activeDeck_].reverse)) turns = -turns;
@@ -3317,6 +3367,9 @@ private:
     struct HeldNote { bool used = false; mpc::MidiEvent ev; int key = 0; double until = 0.0; };
     HeldNote heldHost_[16];
     std::atomic<long long> rawCount_[2] = {{0}, {0}};
+    bool rawSeen_[2] = {false, false}, alignReq_[2] = {false, false};
+    float lastAlign_ = 0.0f;
+    uint64_t lastBlockNs_ = 0;
     std::atomic<float> calCps_{0.0f};                 // measured counts per second of the free-running motor
     std::atomic<int> calSign_{1};
     double platWinCounts_[2] = {0.0, 0.0}, platWinStart_[2] = {-1.0, -1.0};
@@ -3433,7 +3486,8 @@ private:
                 {
                     pollfd pfd{sq.fd, POLLIN, 0};
                     ::poll(&pfd, 1, 4);
-                    sq.readMidi([&](uint8_t a, uint8_t b, uint8_t c) { skr::MidiRec r; r.clock = 0; r.n = 3; r.b[0] = a; r.b[1] = b; r.b[2] = c; seqRing_.push(r); });
+                    const uint64_t tNs = (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+                    sq.readMidi([&](uint8_t a, uint8_t b, uint8_t c) { skr::MidiRec r; r.clock = tNs; r.n = 3; r.b[0] = a; r.b[1] = b; r.b[2] = c; seqRing_.push(r); });
                 }
                 else std::this_thread::sleep_for(std::chrono::milliseconds(20));
             }

@@ -147,6 +147,9 @@ Dafür gibt es das zweite Plugin **SKRATCHA FEED**. Es kommt als Insert auf die 
   - **LERNEN:** unten links **EINGABE** AUTO / STRIP / SC6000M. Mit dem SC6000M zählt der frei laufende Motor-Teller nicht als Hand - nur was du mit der Hand machst.
   - **Sprache:** Reiter SETUP, rechts unten **DEUTSCH / ENGLISH** - alle Beschriftungen und Texte.
   - **Neue Platten-Optik:** Rillen mit Musik-Struktur, Lichtkreuz, edles Label mit Prägung und Goldfolie (JF-Logo ohne Schriftzug), neue INFO-Platte.
+- **Neu in 2.9.1:**
+  - **Sauberer Klang im Modus MOTOR:** Läuft der Teller frei (niemand fasst ihn an), spielt SKRATCHAs eigener Motor die Platte - exakt im Originaltempo, ohne Artefakte. Sobald die Hand den Teller bremst, schiebt oder scratcht, übernimmt der Teller. Die Teller-Daten bekommen ihre echten Zeitstempel und werden gleichmässig über jeden Audio-Block verteilt (vorher kamen sie gebündelt -> ruckelig).
+  - **Bild = Teller:** Die Platte im Bild folgt direkt dem Zählwerk des SC6000M-Tellers. **STRICH = OBEN** (Reiter SC6000M rechts unten): Strich am Teller nach oben drehen, tippen - ab dann steht das Label genau dann aufrecht, wenn der Strich oben ist (wird im Projekt gespeichert).
 - **Grenzen:** Display des SC6000M steuert SKRATCHA nicht. Layer B (Kanal 2) und die Pad-Farben sind am Gerät noch ungetestet. Motor, Lichter und Display des SC6000M lassen sich deshalb nicht vom Plugin steuern. Ob die MPC den SC6000M als MIDI-Gerät annimmt, zeigt erst der Test.
 
 ## LERNEN
