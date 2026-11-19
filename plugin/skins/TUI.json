@@ -14949,7 +14949,7 @@
      }
     },
     {
-     "key": "skTg_motorscan_280x40",
+     "key": "skTg_motorscan_136x40",
      "value": {
       "version": 4,
       "actions": [
@@ -15007,7 +15007,7 @@
          "showWhenDataModelInvalid": "Show",
          "whenVisible": "WhenFocussed",
          "boundsType": "Absolute",
-         "bounds": "0 0 280 40",
+         "bounds": "0 0 136 40",
          "additionalInvalidatingHandles": []
         }
        },
@@ -15019,8 +15019,8 @@
          "type": "Button",
          "data": {
           "version": 2,
-          "onImage": "sk_key_motorscan_280x40_on.png",
-          "offImage": "sk_key_motorscan_280x40_off.png",
+          "onImage": "sk_key_motorscan_136x40_on.png",
+          "offImage": "sk_key_motorscan_136x40_off.png",
           "buttonId": 1,
           "numButtonsInGroup": 1,
           "handleName": "Data",
@@ -15037,7 +15037,103 @@
          "showWhenDataModelInvalid": "Show",
          "whenVisible": "Always",
          "boundsType": "Absolute",
-         "bounds": "0 0 280 40",
+         "bounds": "0 0 136 40",
+         "additionalInvalidatingHandles": []
+        }
+       }
+      ]
+     }
+    },
+    {
+     "key": "skTg_stopscan_136x40",
+     "value": {
+      "version": 4,
+      "actions": [
+       {
+        "version": 2,
+        "onAction": "Enter Pressed",
+        "handler": "Toggle Switch",
+        "handleName": "Data",
+        "additionalData": "",
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        }
+       }
+      ],
+      "backgroundData": {
+       "version": 1,
+       "focussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       },
+       "unfocussed": {
+        "version": 1,
+        "colour": "0",
+        "image": ""
+       }
+      },
+      "ignoreMousePresses": false,
+      "disableCoarseDataWheel": false,
+      "repeats": 1,
+      "hideQLinkBounds": true,
+      "componentsData": [
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Focus",
+         "type": "Focus",
+         "data": {
+          "version": 1,
+          "backgroundColour": "00000000",
+          "outlineColour": "00000000",
+          "backgroundInset": 2.0,
+          "outlineThickness": 0.0
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 2,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "WhenFocussed",
+         "boundsType": "Absolute",
+         "bounds": "0 0 136 40",
+         "additionalInvalidatingHandles": []
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "Button",
+         "type": "Button",
+         "data": {
+          "version": 2,
+          "onImage": "sk_key_stopscan_136x40_on.png",
+          "offImage": "sk_key_stopscan_136x40_off.png",
+          "buttonId": 1,
+          "numButtonsInGroup": 1,
+          "handleName": "Data",
+          "gestureBehaviour": "Instant"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": []
+        },
+        "bounds": {
+         "version": 2,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "0 0 136 40",
          "additionalInvalidatingHandles": []
         }
        }
@@ -30002,7 +30098,7 @@
         "componentData": {
          "version": 1,
          "name": "motorscan",
-         "type": "skTg_motorscan_280x40",
+         "type": "skTg_motorscan_136x40",
          "data": {
           "version": 1,
           "handleName": "Data"
@@ -30023,7 +30119,37 @@
          "showWhenDataModelInvalid": "Show",
          "whenVisible": "Always",
          "boundsType": "Absolute",
-         "bounds": "320 494 280 40",
+         "bounds": "320 494 136 40",
+         "additionalInvalidatingHandles": []
+        }
+       },
+       {
+        "version": 2,
+        "componentData": {
+         "version": 1,
+         "name": "stopscan",
+         "type": "skTg_stopscan_136x40",
+         "data": {
+          "version": 1,
+          "handleName": "Data"
+         }
+        },
+        "handle remapping": {
+         "version": 1,
+         "map": [
+          {
+           "key": "Data",
+           "value": "Parameter 251"
+          }
+         ]
+        },
+        "bounds": {
+         "version": 2,
+         "acceptsHWFocus": "No",
+         "showWhenDataModelInvalid": "Show",
+         "whenVisible": "Always",
+         "boundsType": "Absolute",
+         "bounds": "464 494 136 40",
          "additionalInvalidatingHandles": []
         }
        },

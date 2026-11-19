@@ -862,7 +862,8 @@ def main():
     toggle(sct, scpv, "Midi Prev", "midiprev", "< ZURUECK", 40, 366, 200, 120, "dark", momentary=True)
     toggle(sct, scpv, "Midi Next", "midinext", "WEITER >", 256, 366, 344, 120, "silver", momentary=True)
     sct.place(def_text("skScFile", 270, 40, 13, "ffd8dade", "horizontallyCentred verticallyCentred"), P["Midi File"], 40, 494, 270, 40, name="file")
-    toggle(sct, scpv, "Motor Scan", "motorscan", "MOTOR SUCHEN", 320, 494, 280, 40, "silver")
+    toggle(sct, scpv, "Motor Scan", "motorscan", "MOTOR SUCHEN", 320, 494, 136, 40, "silver")
+    toggle(sct, scpv, "Stop Scan", "stopscan", "STOP SUCHEN", 464, 494, 136, 40, "silver")
     segments(sct, scpv, "Controller", ["LERNEN", "SC6000M"], 40, 540, 134, 48, gap=6)
     segments(sct, scpv, "Platter Dir", ["NORMAL", "UMGEKEHRT"], 330, 540, 132, 48, gap=6)
     for i in range(8):

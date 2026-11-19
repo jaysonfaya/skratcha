@@ -172,6 +172,7 @@ public:
         kPlatMode,
         // ---- 2.7.1: search for the SC6000M motor command (writes into the MPC's own MIDI connection) ----
         kMotorScan,
+        kStopScan,          // 2.7.3: search the command that stops the SC6000M motor again (start = CC 65)
         kNumParams
     };
 
@@ -184,7 +185,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2720;
+        i.version = 2730;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -384,6 +385,7 @@ public:
         // MOTOR: the platter is the record itself (only when its motor really turns)
         addParam(choiceParam("platmode", "Platter Mode", {"HAND", "MOTOR"}, 0));
         addParam(fixed(boolParam("motorscan", "Motor Scan", false)));
+        addParam(fixed(boolParam("stopscan", "Stop Scan", false)));
         if (numParams() != kNumParams) mpc::log("SKRATCHA: parameter count mismatch %d %d", numParams(), (int)kNumParams);
 
         deckP_[0] = {kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kFader, kReverse, kLoop, kAngle, kCutLed, kStrobe, kASlot, kAStyle, kAVol, kAName, kANames};
@@ -3165,15 +3167,87 @@ private:
     }
     void motorLoop()
     {
-        bool last = false;
+        bool last = false, lastStop = false;
         while (!stopThread_.load())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             const bool on = getBool(kMotorScan);
             if (on && !last) runMotorScan();
             last = on;
+            const bool st = getBool(kStopScan);
+            if (st && !lastStop) runStopScan();
+            lastStop = st;
         }
     }
+    // start the motor with CC 65 = 127, then try candidates until the platter stops; verify by starting/stopping again
+    void runStopScan()
+    {
+        std::string log;
+        auto stamp = [] { char b[16]; std::time_t t = std::time(nullptr); std::strftime(b, sizeof(b), "%H:%M:%S ", std::localtime(&t)); return std::string(b); };
+        auto save = [&] { if (FILE* f = std::fopen("/tmp/sc-motor-stop.log", "w")) { std::fputs(log.c_str(), f); std::fclose(f); } };
+        auto say = [&](const std::string& m) { log += stamp() + m + "\n"; save(); };
+        auto show = [&](const std::string& m) { setText(platInfo_, m, kPlatInfo); };
+        auto aborted = [&] { return stopThread_.load() || !getBool(kStopScan); };
+        say("SKRATCHA Motor-STOP-Suche");
+        skrseq::Client sq;
+        const bool okSeq = sq.open("SC6000");
+        if (!okSeq) { log += sq.log; say("FEHLER: SC6000M im Sequencer nicht gefunden"); show("STOP: SC6000M NICHT GEFUNDEN"); return; }
+        say("Ziel " + std::to_string(sq.dev.client) + ":" + std::to_string(sq.dev.port) + (sq.listening ? " (mithoeren OK)" : " (mithoeren GEHT NICHT)"));
+        auto rateMs = [&](int ms) {
+            sq.drainPlatter(); int own = 0; const uint32_t a = platFrames_.load();
+            for (int i = 0; i < ms / 50 && !aborted(); ++i) { std::this_thread::sleep_for(std::chrono::milliseconds(50)); own += sq.drainPlatter(); }
+            return (int)((int64_t)std::max((int)(platFrames_.load() - a), own) * 1000 / std::max(ms, 1));
+        };
+        const int th = 300;
+        auto spinning = [&] { return rateMs(1000) > th; };
+        // 1. start
+        sq.cc(0, 65, 127);
+        bool up = false;
+        for (int i = 0; i < 6 && !aborted() && !up; ++i) up = spinning();
+        if (aborted()) { say("ABGEBROCHEN"); show("STOP-SUCHE ABGEBROCHEN"); return; }
+        if (!up) { say("FEHLER: CC 65 = 127 startet den Motor nicht (oder Teller-Daten kommen nicht an)"); show("STOP: MOTOR LAEUFT NICHT AN"); return; }
+        say("Motor laeuft (CC 65 = 127).");
+        struct Cand { int kind, num, on, off; std::string name; };   // kind 0 = CC, 1 = note; off < 0: no second message
+        std::vector<Cand> c;
+        c.push_back({0, 65, 127, -1, "CC 65 = 127 nochmal"});
+        c.push_back({0, 65, 0, -1, "CC 65 = 0"});
+        for (int v = 1; v <= 126; ++v) c.push_back({0, 65, v, -1, "CC 65 = " + std::to_string(v)});
+        for (int n = 0; n <= 119; ++n) if (n != 65) c.push_back({0, n, 127, 0, "CC " + std::to_string(n) + " 127/0"});
+        for (int n = 0; n <= 127; ++n) c.push_back({1, n, 127, 0, "NOTE " + std::to_string(n)});
+        c.push_back({2, 65, 127, -1, "CC 65 = 127 KANAL 2"});
+        c.push_back({2, 65, 0, -1, "CC 65 = 0 KANAL 2"});
+        auto fire = [&](const Cand& k, bool second) {
+            const int v = second ? k.off : k.on; if (v < 0) return;
+            const int ch = k.kind == 2 ? 1 : 0;
+            if (k.kind == 1) sq.note(ch, k.num, v); else sq.cc(ch, k.num, v);
+        };
+        int found = -1;
+        for (size_t i = 0; i < c.size() && !aborted(); ++i)
+        {
+            char t[64]; std::snprintf(t, sizeof(t), "STOP SUCHT: %s", c[i].name.c_str()); show(t);
+            fire(c[i], false); fire(c[i], true);
+            rateMs(500);                                   // braking time
+            const int r1 = rateMs(1000), r2 = rateMs(1000);
+            say(c[i].name + ": " + std::to_string(r1) + " / " + std::to_string(r2));
+            if (r2 <= th && r1 < 3000) { found = (int)i; break; }
+            if (r2 <= th) continue;                         // should not happen
+        }
+        if (aborted()) { say("ABGEBROCHEN"); show("STOP-SUCHE ABGEBROCHEN"); sq.cc(0, 65, 0); return; }
+        if (found < 0) { say("KEIN STOP-BEFEHL GEFUNDEN. Motor laeuft noch: SC6000M aus/an schalten."); show("STOP: NICHTS GEFUNDEN (SC6000M AUS/AN)"); return; }
+        const Cand& k = c[(size_t)found];
+        say("TREFFER STOP: " + k.name);
+        // 2. verify: start again, stop again
+        sq.cc(0, 65, 127); bool up2 = false;
+        for (int i = 0; i < 6 && !aborted() && !up2; ++i) up2 = spinning();
+        say(std::string("Pruefung: Neustart mit CC 65 = 127 -> ") + (up2 ? "laeuft" : "laeuft NICHT"));
+        fire(k, false); fire(k, true); rateMs(1500);
+        const bool down2 = !spinning();
+        say(std::string("Pruefung: ") + k.name + " -> " + (down2 ? "steht" : "dreht weiter"));
+        show("STOP TREFFER: " + k.name + (up2 && down2 ? " (GEPRUEFT)" : ""));
+        if (!down2) say("Motor laeuft eventuell noch: SC6000M aus/an schalten.");
+        say("FERTIG");
+    }
+
     void runMotorScan()
     {
         std::string log;
