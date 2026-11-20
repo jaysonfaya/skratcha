@@ -182,7 +182,9 @@ public:
         // ---- 2.9.1 ----
         kPlatAlign,         // tap: the line on the SC6000M platter points up now -> the label stands upright there
         kPlatZero,          // stored offset (turns) between the platter count and the upright label
-        kNumParams
+        // ---- 2.9.2: 96 label positions per turn = two film strips (even / odd angles) ----
+        kLab2C, kLab2A = kLab2C + 10, kLab2B = kLab2A + 10,
+        kNumParams = kLab2B + 10
     };
 
     struct RecJob { std::vector<float> data; int deck = 0, slot = 0; double sr = 44100.0; };
@@ -194,7 +196,7 @@ public:
         i.name = "SKRATCHA";
         i.vendor = "JJ DA PLUG";
         i.uniqueId = MPC_FOURCC('J', 'J', 's', 'K');   // == "uid" in plugin.json
-        i.version = 2910;
+        i.version = 2920;
         i.isInstrument = true;
         i.numInputs = 0;
         i.numOutputs = 2;
@@ -402,6 +404,13 @@ public:
         addParam(fixed(choiceParam("learnin", "Learn Input", {"AUTO", "TOUCH STRIP", "SC6000M"}, 0)));
         addParam(fixed(boolParam("platalign", "Platter Align", false)));
         addParam(fixed(floatParam("platzero", "Platter Zero", 0.0f, 1.0f, 0.0f, "", 4)));
+        for (const char* k : {"c", "a", "b"})
+            for (int i = 0; i < kNumStyles; ++i)
+            {
+                const std::string id = std::string("lab2") + k + std::to_string(i);
+                const std::string nm = std::string(k[0] == 'c' ? "" : (k[0] == 'a' ? "A " : "B ")) + "Label2 " + std::to_string(i);
+                addParam(fixed(floatParam(id.c_str(), nm.c_str(), 0.0f, 1.0f, 0.0f, "", 3)));
+            }
         if (numParams() != kNumParams) mpc::log("SKRATCHA: parameter count mismatch %d %d", numParams(), (int)kNumParams);
 
         deckP_[0] = {kPlay, kSpeed, kPitch, kPitchRange, kStart, kBrake, kFader, kReverse, kLoop, kAngle, kCutLed, kStrobe, kASlot, kAStyle, kAVol, kAName, kANames};
@@ -1161,7 +1170,8 @@ private:
             D.startStep = D.unity * speedRatio / std::max(1.0, get(P.start) * 0.001 * sr_ * St.torque);
             D.brakeStep = D.unity * speedRatio / std::max(1.0, get(P.brake) * 0.001 * sr_ * St.brake);
             D.catchCoef = 1.0 - std::exp(-1.0 / std::max(1.0, catchBase * St.catchMul));
-            const double tau = std::max(8.0, tauBase * St.mass);
+            double tau = std::max(8.0, tauBase * St.mass);
+            if (scActive() && handSrc_ == kSrcJog) tau = std::max(8.0, 0.0012 * sr_);   // SC6000M platter: 1.2 ms
             D.springK = 1.0 / (tau * tau);
             D.springD = 2.0 / tau;
             D.samplesPerRev = fileSr / (kRevPerSecond33 * St.rpm / 33.333);
@@ -1680,17 +1690,31 @@ private:
             counts = v;
             rawCount_[layer].fetch_add(v, std::memory_order_relaxed);
             rawSeen_[layer] = true;
-            // free-running check (motor turns it, no hand): 25 ms windows against the measured motor speed
-            platWinCounts_[layer] += v;
-            if (platWinStart_[layer] < 0.0) platWinStart_[layer] = eventClock_;
-            const double winLen = eventClock_ - platWinStart_[layer];
-            if (winLen >= 0.025 * sr_)
+            // free-running check (motor turns it, no hand), per frame and fast:
+            //  - smoothed speed (time constant 4 ms) against the measured motor speed
+            //  - a hand is there at once when the speed is more than 7 % off or the platter goes backwards,
+            //    free again only after 50 ms within 4 %
             {
                 const float cal0 = calCps_.load(std::memory_order_relaxed);
                 const double cal = cal0 > 100.0f ? (double)cal0 : 3600.0 * (getInt(kPlatRpm) == 1 ? 45.0 : 100.0 / 3.0) / 60.0;
-                const double rate = platWinCounts_[layer] / (winLen / sr_) * (double)calSign_.load(std::memory_order_relaxed);
-                platFree_[layer] = std::fabs(rate / cal - 1.0) < 0.06;
-                platWinCounts_[layer] = 0.0; platWinStart_[layer] = eventClock_;
+                const double sgn = (double)calSign_.load(std::memory_order_relaxed);
+                const double dt = platLastClock_[layer] < 0.0 ? 0.0 : eventClock_ - platLastClock_[layer];
+                platLastClock_[layer] = eventClock_;
+                if (dt > 0.0 && dt < 0.03 * sr_)
+                {
+                    const double inst = (double)v * sgn / (dt / sr_);
+                    const double k = 1.0 - std::exp(-(dt / sr_) / 0.004);
+                    platEma_[layer] += (inst - platEma_[layer]) * k;
+                }
+                else platEma_[layer] = (double)v * sgn * 1000.0;            // first frame: ~1 ms apart
+                const double q = platEma_[layer] / cal;
+                if ((double)v * sgn < 0.0 || std::fabs(q - 1.0) > 0.07) { platFree_[layer] = false; platCalmSince_[layer] = -1.0; }
+                else if (!platFree_[layer] && std::fabs(q - 1.0) < 0.04)
+                {
+                    if (platCalmSince_[layer] < 0.0) platCalmSince_[layer] = eventClock_;
+                    else if (eventClock_ - platCalmSince_[layer] > 0.05 * sr_) platFree_[layer] = true;
+                }
+                else if (std::fabs(q - 1.0) >= 0.04) platCalmSince_[layer] = -1.0;
             }
         }
         else
@@ -2832,7 +2856,7 @@ private:
     void designReporter(int* dip, int* shown, int (*lastLab)[kNumStyles], int* phase, bool labels, int layout)
     {
         auto notify = [this](int idx) { if (effect_ != nullptr && host_ != nullptr) notifyHostParameterChanged(idx); };
-        const int shownP[3] = {kShownA, kShownB, kShownC}, dipP[3] = {kDipA, kDipB, kDipC}, labBase[3] = {kLabA, kLabB, kLabC};
+        const int shownP[3] = {kShownA, kShownB, kShownC}, dipP[3] = {kDipA, kDipB, kDipC}, labBase[3] = {kLabA, kLabB, kLabC}, lab2Base[3] = {kLab2A, kLab2B, kLab2C};
         const int active = liveActive_.load();
         for (int k = 0; k < 3; ++k)
         {
@@ -2856,11 +2880,19 @@ private:
             if ((!labels && !switched) || layout == 2 || (k < 2 && layout != 1) || (k == 2 && layout != 0)) continue;
             const int d = k == 2 ? active : k;
             const double revs = liveRevs_[d].load();
-            const int fr = 1 + mpc::clamp((int)((revs - std::floor(revs)) * kAngleFrames), 0, kAngleFrames - 1);
+            // 96 positions per turn: even ones in the first strip, odd ones in the second (frame 0 = empty)
+            const int a96 = mpc::clamp((int)std::lround((revs - std::floor(revs)) * 96.0) % 96, 0, 95);
+            const int frE = (a96 % 2 == 0) ? a96 / 2 + 1 : 0, frO = (a96 % 2 == 1) ? a96 / 2 + 1 : 0;
             for (int st = 0; st < kNumStyles; ++st)
             {
-                const int v = st == shown[k] ? fr : 0;
-                if (v != lastLab[k][st]) { lastLab[k][st] = v; setNormalised(labBase[k] + st, (float)v / (float)kAngleFrames); notify(labBase[k] + st); }
+                const int v = st == shown[k] ? frE : 0, v2 = st == shown[k] ? frO : 0;
+                // the newly visible frame first, then the old one off: never an empty label in between
+                int (*lastLab2)[kNumStyles] = lastLab2_;
+                const bool ch1 = v != lastLab[k][st], ch2 = v2 != lastLab2[k][st];
+                if (ch1 && v != 0) { lastLab[k][st] = v; setNormalised(labBase[k] + st, (float)v / (float)kAngleFrames); notify(labBase[k] + st); }
+                if (ch2 && v2 != 0) { lastLab2[k][st] = v2; setNormalised(lab2Base[k] + st, (float)v2 / (float)kAngleFrames); notify(lab2Base[k] + st); }
+                if (ch1 && v == 0) { lastLab[k][st] = v; setNormalised(labBase[k] + st, 0.0f); notify(labBase[k] + st); }
+                if (ch2 && v2 == 0) { lastLab2[k][st] = v2; setNormalised(lab2Base[k] + st, 0.0f); notify(lab2Base[k] + st); }
             }
         }
     }
@@ -3368,11 +3400,13 @@ private:
     HeldNote heldHost_[16];
     std::atomic<long long> rawCount_[2] = {{0}, {0}};
     bool rawSeen_[2] = {false, false}, alignReq_[2] = {false, false};
+    int lastLab2_[3][kNumStyles] = {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}};
     float lastAlign_ = 0.0f;
     uint64_t lastBlockNs_ = 0;
     std::atomic<float> calCps_{0.0f};                 // measured counts per second of the free-running motor
     std::atomic<int> calSign_{1};
     double platWinCounts_[2] = {0.0, 0.0}, platWinStart_[2] = {-1.0, -1.0};
+    double platLastClock_[2] = {-1.0, -1.0}, platEma_[2] = {0.0, 0.0}, platCalmSince_[2] = {-1.0, -1.0};
     bool platFree_[2] = {false, false}, scTouch_[2] = {false, false}, scTouchSeen_ = false;
     bool scShift_[2] = {false, false};
     std::atomic<int> scPadMode_[2] = {{0}, {0}};

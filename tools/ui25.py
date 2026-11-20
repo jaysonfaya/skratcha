@@ -85,6 +85,7 @@ def quant(img):
 def render_design(i):
     D = DESIGNS[i]
     img, maps, hits, rgb = U.draw_deck(D["plinth"], D)
+    U.LABEL_FRAMES = 96          # 2.9.2: 96 label positions per turn (two strips: even / odd angles)
     strip, frames, rect = U.draw_label_frames(maps, hits, D)
     out = {"bg": img, "label": frames, "label_rect": rect}
     if i == 5:   # the reference deck: strobe ring, tone arm, panel
@@ -527,8 +528,11 @@ def main():
     disp(deck, "skDeckAll", save(deck_strip.convert("RGB"), "sk_decks_f10.jpg" if False else "sk_decks_f10.png"), NSTY, "Shown Style", 0, 0, PX + 6, H, (L0,))
     blank_lab = Image.new("RGBA", R[0]["label"][0].size, (0, 0, 0, 0))
     for i in range(NSTY):
-        lab = quant(strip_of([blank_lab] + list(R[i]["label"])))
+        fr96 = list(R[i]["label"])
+        lab = quant(strip_of([blank_lab] + fr96[0::2]))
         disp(deck, "skLabel%d" % i, save(lab, "sk_label%d_f49.png" % i), 49, "Label %d" % i, lrx, lry, lrw, lrh, (L0,))
+        lab2 = quant(strip_of([blank_lab] + fr96[1::2]))
+        disp(deck, "skLabelO%d" % i, save(lab2, "sk_label%do_f49.png" % i), 49, "Label2 %d" % i, lrx, lry, lrw, lrh, (L0,))
     panel = ref["bg"].crop((PX, 0, W, H)).convert("RGBA")
     pm = Image.new("L", panel.size, 0)
     ImageDraw.Draw(pm).rounded_rectangle([812 - PX - 1, 5, 1274 - PX + 1, 623], 16, fill=255)
@@ -542,7 +546,7 @@ def main():
     for i in (5, 0, 9):
         pv_ = Image.new("RGBA", (W, H), (14, 14, 15, 255))
         pv_.alpha_composite(R[i]["bg"].crop((0, 0, PX + 6, H)), (0, 0)); pv_.alpha_composite(pbg, (PX, 0))
-        pv_.alpha_composite(strobe_frames[0], (srx, sry)); pv_.alpha_composite(R[i]["label"][3], (lrx, lry)); pv_.alpha_composite(arm, (ax, ay))
+        pv_.alpha_composite(strobe_frames[0], (srx, sry)); pv_.alpha_composite(R[i]["label"][6], (lrx, lry)); pv_.alpha_composite(arm, (ax, ay))
         prevs.append(pv_)
     badge = [save(U.deck_badge(Lt, None), "sk_badge_%s.png" % Lt.lower()) for Lt in "AB"]
     for d in range(2):
@@ -633,7 +637,9 @@ def main():
         fn = None
         lfr = [f.resize((int(lrw * sc), int(lrh * sc)), Image.LANCZOS) for f in R[i]["label"]]
         small_imgs.append(im)
-        lab_small.append((fn, save(quant(strip_of([Image.new("RGBA", lfr[0].size, (0, 0, 0, 0))] + lfr)), "sk_label_small%d_f49.png" % i), lfr))
+        lblank = Image.new("RGBA", lfr[0].size, (0, 0, 0, 0))
+        lab_small.append((save(quant(strip_of([lblank] + lfr[1::2])), "sk_label_small%do_f49.png" % i),
+                          save(quant(strip_of([lblank] + lfr[0::2])), "sk_label_small%d_f49.png" % i), lfr[0::2]))
         if i in (5, 6):
             prevB.alpha_composite(im, (BDX[i - 5], 0))
     small_fn = save(strip_of([im_.convert("RGB").convert("RGBA") for im_ in small_imgs]).convert("RGB"), "sk_decks_small_f10.png")
@@ -656,6 +662,7 @@ def main():
         for i in range(NSTY):
             fn, lfn, lfr = lab_small[i]
             disp(deck, "skLabelS%d" % i, lfn, 49, "%s Label %d" % (Ln, i), ox + int(lrx * sc), int(lry * sc), lfr[0].width, lfr[0].height, (L1,))
+            disp(deck, "skLabelSO%d" % i, fn, 49, "%s Label2 %d" % (Ln, i), ox + int(lrx * sc), int(lry * sc), lfr[0].width, lfr[0].height, (L1,))
         prevB.alpha_composite(str_s[0], (ox + int(srx * sc), int(sry * sc)))
         prevB.alpha_composite(lab_small[5 + d][2][3], (ox + int(lrx * sc), int(lry * sc)))
         disp(deck, "skDipS%d" % d, dip_s_fn, 8, "%s Dip" % Ln, ox, 0, dw, dh, (L1,))

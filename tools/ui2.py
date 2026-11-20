@@ -680,7 +680,7 @@ def draw_info_bg():
     # deep emboss: the gold stands up from the paper, with a soft shadow ring around it
     Hm[:] = Hm + PB.blur(foil, 1.2 * S) * 1.8 * S - PB.blur(foil, 3.0 * S) * 0.5 * S * (1 - foil)
     items = [(640 * S, 560 * S, "SKRATCHA  ·  CREATOR: JJ DA PLUG", font(F_BOLD, 24 * S), "mm", 3 * S),
-             (640 * S, 592 * S, "VERSION 2.9.1  ·  10 TURNTABLES  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), "mm", S)]
+             (640 * S, 592 * S, "VERSION 2.9.2  ·  10 TURNTABLES  ·  MPC PLUGIN SDK", font(F_MED, 14 * S), "mm", S)]
     left = ["PADS = BILDSCHIRM (4 x 4)", "13 DECK A  14 DECK B  15 REV  16 SLIP", "9 CUT   10 HOLD   11 CUE   12 START",
             "1-8  SAMPLES (5-8 UEBER 1-4)", "BATTLE: LINKS A, RECHTS B (GESPIEGELT)", "HOLD + CUE = CUE SETZEN",
             "ANSICHT-TASTE = LAYOUT", "RUNDE LEUCHTE = TURNTABLE-AERA"]
